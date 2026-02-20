@@ -1,11 +1,16 @@
 import * as admin from 'firebase-admin';
 
 function normalizePrivateKey(raw: string): string {
+  if (!raw) return '';
   let key = raw.trim();
-  if (!key) return key;
+  // Replace escaped newlines with actual newlines
   key = key.replace(/\\n/g, '\n');
+  // Normalize line endings
   key = key.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
   key = key.trim();
+  
+  // If the key doesn't have proper line breaks but contains BEGIN/END markers,
+  // reformat it with proper line breaks
   if (!key.includes('\n') && key.includes('-----BEGIN') && key.includes('-----END')) {
     const begin = '-----BEGIN PRIVATE KEY-----';
     const end = '-----END PRIVATE KEY-----';
@@ -17,6 +22,12 @@ function normalizePrivateKey(raw: string): string {
       key = begin + '\n' + lines.join('\n') + '\n' + end;
     }
   }
+  
+  // Ensure proper formatting
+  if (!key.endsWith('\n')) {
+    key = key + '\n';
+  }
+  
   return key;
 }
 

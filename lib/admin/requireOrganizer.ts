@@ -10,18 +10,29 @@ export async function requireOrganizer(
   const idToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
 
   if (!idToken) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json(
+      { error: 'Unauthorized: No authentication token provided' },
+      { status: 401 }
+    );
   }
 
   let decoded: { uid: string };
   try {
     decoded = await getAdminAuth().verifyIdToken(idToken);
   } catch (tokenError: unknown) {
-    const err = tokenError as { code?: string };
-    console.error('[requireOrganizer] Token verification failed:', tokenError);
+    const err = tokenError as { code?: string; message?: string };
+    console.error('[requireOrganizer] Token verification failed:', {
+      code: err?.code,
+      message: err?.message,
+      tokenLength: idToken.length,
+    });
     const isExpired = err?.code === 'auth/id-token-expired';
     return NextResponse.json(
-      { error: isExpired ? 'Session expired. Please sign in again.' : 'Invalid token' },
+      {
+        error: isExpired
+          ? 'Session expired. Please sign in again.'
+          : `Invalid token: ${err?.code || err?.message || 'Unknown error'}`,
+      },
       { status: 401 }
     );
   }

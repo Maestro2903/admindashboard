@@ -1,7 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useAuth } from '@/features/auth/AuthContext';
+import { usePayments } from '@/hooks/use-payments';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -21,7 +22,15 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { IconSearch, IconChevronLeft, IconChevronRight, IconCheck, IconX, IconTrash, IconDownload } from '@tabler/icons-react';
+import {
+  IconSearch,
+  IconChevronLeft,
+  IconChevronRight,
+  IconCheck,
+  IconX,
+  IconTrash,
+  IconDownload,
+} from '@tabler/icons-react';
 
 const PAGE_SIZE = 50;
 type SortKey = 'createdAt' | 'updatedAt' | 'amount' | 'status' | 'passType' | 'name';
@@ -53,149 +62,196 @@ const STATUS_STYLES: Record<string, string> = {
   failed: 'bg-red-500/10 text-red-400',
 };
 
+const SKELETON_ROWS = [1, 2, 3, 4, 5, 6] as const;
+const SKELETON_CELLS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const;
+const INITIAL_FILTERS = {
+  search: '',
+  statusFilter: 'all',
+  sortBy: 'createdAt' as SortKey,
+  sortDir: 'desc' as 'asc' | 'desc',
+  tablePage: 1,
+};
+const CLOSED_EDIT = { payment: null as Payment | null, saving: false, status: 'pending' as 'pending' | 'success' | 'failed', note: '' };
+
+// ─── Sub-components ────────────────────────────────────────────────────────────
+
+function BulkActionsBar({
+  count,
+  onVerify,
+  onDelete,
+  onClear,
+}: {
+  count: number;
+  onVerify: () => void;
+  onDelete: () => void;
+  onClear: () => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-zinc-800 bg-zinc-800/60 px-4 py-3">
+      <span className="text-sm text-zinc-300">{count} selected</span>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button variant="ghost" size="sm" className="text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300" onClick={onVerify}>
+          <IconCheck size={14} className="mr-1" /> Mark as success
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-red-400 hover:bg-red-500/10 hover:text-red-300"
+          onClick={() => {
+            if (typeof window !== 'undefined' && window.confirm(`Permanently delete ${count} payment(s) from the database? This cannot be undone.`)) {
+              onDelete();
+            }
+          }}
+        >
+          <IconTrash size={14} className="mr-1" /> Delete permanently
+        </Button>
+        <Button variant="ghost" size="sm" className="text-zinc-400 hover:bg-zinc-700 hover:text-white" onClick={onClear}>
+          <IconX size={14} className="mr-1" /> Clear
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function PaymentEditSheet({
+  editState,
+  onClose,
+  onSave,
+  onFormChange,
+}: {
+  editState: typeof CLOSED_EDIT;
+  onClose: () => void;
+  onSave: () => void;
+  onFormChange: (patch: Partial<typeof CLOSED_EDIT>) => void;
+}) {
+  const { payment, saving, status, note } = editState;
+  return (
+    <Sheet open={!!payment} onOpenChange={(open) => !open && onClose()}>
+      <SheetContent side="right" className="bg-zinc-900 border-zinc-800 text-white">
+        <SheetHeader>
+          <SheetTitle className="text-white">Edit Payment</SheetTitle>
+        </SheetHeader>
+        {payment && (
+          <div className="mt-6 space-y-4">
+            <div>
+              <Label className="text-zinc-400 text-xs uppercase tracking-wider">Order ID</Label>
+              <p className="mt-1 text-sm font-mono text-zinc-300">{payment.cashfreeOrderId || payment.id}</p>
+            </div>
+            <div>
+              <Label className="text-zinc-400 text-xs uppercase tracking-wider">Amount</Label>
+              <p className="mt-1 text-sm font-medium text-white">₹{payment.amount}</p>
+            </div>
+            <div>
+              <Label htmlFor="edit-payment-status" className="text-zinc-400 text-xs uppercase tracking-wider">Status</Label>
+              <Select value={status} onValueChange={(v) => onFormChange({ status: v as typeof status })}>
+                <SelectTrigger id="edit-payment-status" className="mt-1.5 bg-zinc-800 border-zinc-700 text-zinc-300">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-zinc-800 border-zinc-700 text-zinc-300">
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="success">Success</SelectItem>
+                  <SelectItem value="failed">Failed</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="edit-payment-note" className="text-zinc-400 text-xs uppercase tracking-wider">Admin Note</Label>
+              <Input
+                id="edit-payment-note"
+                value={note}
+                onChange={(e) => onFormChange({ note: e.target.value })}
+                placeholder="Optional note..."
+                className="mt-1.5 bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-600"
+              />
+            </div>
+          </div>
+        )}
+        <SheetFooter className="mt-8">
+          <Button variant="outline" onClick={onClose} className="border-zinc-700 text-zinc-300 hover:bg-zinc-800">Cancel</Button>
+          <Button onClick={onSave} disabled={saving} className="bg-white text-zinc-900 hover:bg-zinc-200">
+            {saving ? 'Saving...' : 'Save'}
+          </Button>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+// ─── Page ──────────────────────────────────────────────────────────────────────
+
 export default function PaymentsPage() {
   const { user } = useAuth();
-  const [payments, setPayments] = useState<Payment[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [editPayment, setEditPayment] = useState<Payment | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [formStatus, setFormStatus] = useState<'pending' | 'success' | 'failed'>('pending');
-  const [formNote, setFormNote] = useState('');
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const { payments, loading, error, refetch } = usePayments(user ?? null);
+  const [editState, setEditState] = useState(CLOSED_EDIT);
+  const [filters, setFilters] = useState(INITIAL_FILTERS);
   const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({});
-  const [sortBy, setSortBy] = useState<SortKey>('createdAt');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
-  const [tablePage, setTablePage] = useState(1);
 
-  const refetch = useCallback(() => {
-    if (!user) return;
-    user.getIdToken().then((token) =>
-      fetch('/api/payments', { headers: { Authorization: `Bearer ${token}` } })
-        .then((res) => res.json())
-        .then((data) => setPayments(data.payments || []))
-    );
-  }, [user]);
+  const { search, statusFilter, sortBy, sortDir, tablePage } = filters;
 
-  const openEdit = (p: Payment) => {
-    setEditPayment(p);
-    setFormStatus(p.status as 'pending' | 'success' | 'failed');
-    setFormNote('');
-  };
+  const openEdit = (p: Payment) =>
+    setEditState({ payment: p, saving: false, status: p.status as typeof CLOSED_EDIT['status'], note: '' });
+  const closeEdit = () => setEditState(CLOSED_EDIT);
 
   const savePayment = async () => {
-    if (!editPayment || !user) return;
-    setSaving(true);
+    if (!editState.payment || !user) return;
+    setEditState((s) => ({ ...s, saving: true }));
     try {
       const token = await user.getIdToken();
       const res = await fetch('/api/admin/update-payment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
-          paymentId: editPayment.id,
-          status: formStatus,
-          ...(formNote.trim() ? { note: formNote.trim() } : {}),
+          paymentId: editState.payment.id,
+          status: editState.status,
+          ...(editState.note.trim() ? { note: editState.note.trim() } : {}),
         }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? 'Update failed');
       toast.success('Payment updated');
-      setEditPayment(null);
+      closeEdit();
       refetch();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Update failed');
     } finally {
-      setSaving(false);
+      setEditState((s) => ({ ...s, saving: false }));
     }
   };
 
   const dateFmt = useMemo(
-    () =>
-      new Intl.DateTimeFormat('en-IN', {
-        timeZone: 'Asia/Kolkata',
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
-      }),
+    () => new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }),
     []
   );
 
-  useEffect(() => {
-    if (!user) { setLoading(false); return; }
-    const controller = new AbortController();
-    (async () => {
-      try {
-        setLoading(true);
-        const token = await user.getIdToken();
-        const res = await fetch('/api/payments', {
-          headers: { Authorization: `Bearer ${token}` },
-          signal: controller.signal,
-        });
-        if (!res.ok) throw new Error(`Failed: ${res.status}`);
-        const data = await res.json();
-        setPayments(data.payments || []);
-        setError(null);
-      } catch (err) {
-        if (!controller.signal.aborted) {
-          setError(err instanceof Error ? err.message : 'Unknown error');
-        }
-      } finally {
-        if (!controller.signal.aborted) setLoading(false);
-      }
-    })();
-    return () => controller.abort();
-  }, [user]);
-
   const filteredPayments = useMemo(() => {
     let results = payments;
-    if (statusFilter !== 'all') {
-      results = results.filter((p) => p.status === statusFilter);
-    }
+    if (statusFilter !== 'all') results = results.filter((p) => p.status === statusFilter);
     if (search.trim()) {
       const q = search.toLowerCase();
       results = results.filter((p) =>
-        (p.cashfreeOrderId?.toLowerCase().includes(q)) ||
-        (p.id.toLowerCase().includes(q)) ||
-        (p.passType?.toLowerCase().includes(q)) ||
-        (p.name?.toLowerCase().includes(q)) ||
-        (p.email?.toLowerCase().includes(q))
+        p.cashfreeOrderId?.toLowerCase().includes(q) ||
+        p.id.toLowerCase().includes(q) ||
+        p.passType?.toLowerCase().includes(q) ||
+        p.name?.toLowerCase().includes(q) ||
+        p.email?.toLowerCase().includes(q)
       );
     }
     const dir = sortDir === 'asc' ? 1 : -1;
-    results = [...results].sort((a, b) => {
-      let va: string | number | null = null;
-      let vb: string | number | null = null;
-      if (sortBy === 'createdAt') {
-        va = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-        vb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-      } else if (sortBy === 'updatedAt') {
-        va = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
-        vb = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+    return [...results].sort((a, b) => {
+      let va: string | number = 0, vb: string | number = 0;
+      if (sortBy === 'createdAt' || sortBy === 'updatedAt') {
+        va = a[sortBy] ? new Date(a[sortBy]!).getTime() : 0;
+        vb = b[sortBy] ? new Date(b[sortBy]!).getTime() : 0;
       } else if (sortBy === 'amount') {
-        va = a.amount ?? 0;
-        vb = b.amount ?? 0;
-      } else if (sortBy === 'name') {
-        va = (a.name ?? '').toLowerCase();
-        vb = (b.name ?? '').toLowerCase();
-      } else if (sortBy === 'status') {
-        va = (a.status ?? '').toLowerCase();
-        vb = (b.status ?? '').toLowerCase();
+        va = a.amount ?? 0; vb = b.amount ?? 0;
       } else {
-        va = (a.passType ?? '').toLowerCase();
-        vb = (b.passType ?? '').toLowerCase();
+        va = ((a[sortBy as keyof Payment] as string) ?? '').toLowerCase();
+        vb = ((b[sortBy as keyof Payment] as string) ?? '').toLowerCase();
       }
       if (typeof va === 'number' && typeof vb === 'number') return dir * (va - vb);
       return dir * String(va).localeCompare(String(vb));
     });
-    return results;
   }, [payments, statusFilter, search, sortBy, sortDir]);
-
-  useEffect(() => {
-    setTablePage(1);
-  }, [search, statusFilter, sortBy, sortDir]);
 
   const totalFiltered = filteredPayments.length;
   const totalTablePages = Math.max(1, Math.ceil(totalFiltered / PAGE_SIZE));
@@ -204,93 +260,41 @@ export default function PaymentsPage() {
     [filteredPayments, tablePage]
   );
 
-  const selectedIds = useMemo(
-    () => Object.keys(rowSelection).filter((id) => rowSelection[id]),
-    [rowSelection]
-  );
-  const toggleSelection = useCallback((id: string) => {
-    setRowSelection((prev) => ({ ...prev, [id]: !prev[id] }));
-  }, []);
+  const selectedIds = useMemo(() => Object.keys(rowSelection).filter((id) => rowSelection[id]), [rowSelection]);
+  const toggleSelection = useCallback((id: string) => setRowSelection((prev) => ({ ...prev, [id]: !prev[id] })), []);
   const selectAllOnPage = useCallback(
-    (checked: boolean) => {
-      setRowSelection((prev) => {
-        const next = { ...prev };
-        paginatedPayments.forEach((p) => {
-          next[p.id] = checked;
-        });
-        return next;
-      });
-    },
+    (checked: boolean) => setRowSelection((prev) => { const next = { ...prev }; paginatedPayments.forEach((p) => { next[p.id] = checked; }); return next; }),
     [paginatedPayments]
   );
   const clearSelection = useCallback(() => setRowSelection({}), []);
-  const isAllSelected =
-    paginatedPayments.length > 0 &&
-    paginatedPayments.every((p) => rowSelection[p.id]);
+  const isAllSelected = paginatedPayments.length > 0 && paginatedPayments.every((p) => rowSelection[p.id]);
   const isSomeSelected = paginatedPayments.some((p) => rowSelection[p.id]);
-
-  const runBulkForceVerify = useCallback(async () => {
-    if (!user || selectedIds.length === 0) return;
-    try {
-      const token = await user.getIdToken();
-      const res = await fetch('/api/admin/bulk-action', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          action: 'forceVerifyPayment',
-          targetCollection: 'payments',
-          targetIds: selectedIds.slice(0, 100),
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error ?? 'Action failed');
-      const updated = data?.updated ?? 0;
-      toast.success(`Marked ${updated} payment(s) as success`);
-      setRowSelection({});
-      refetch();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Action failed');
-    }
-  }, [user, selectedIds, refetch]);
-
-  const runBulkDelete = useCallback(async () => {
-    if (!user || selectedIds.length === 0) return;
-    try {
-      const token = await user.getIdToken();
-      const res = await fetch('/api/admin/bulk-action', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          action: 'delete',
-          targetCollection: 'payments',
-          targetIds: selectedIds.slice(0, 100),
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error ?? 'Action failed');
-      const updated = data?.updated ?? 0;
-      toast.success(`Permanently deleted ${updated} payment(s)`);
-      setRowSelection({});
-      refetch();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Action failed');
-    }
-  }, [user, selectedIds, refetch]);
-
   const totalRevenue = payments.filter((p) => p.status === 'success').reduce((sum, p) => sum + p.amount, 0);
+
+  const runBulkAction = useCallback(async (action: 'forceVerifyPayment' | 'delete') => {
+    if (!user || selectedIds.length === 0) return;
+    try {
+      const token = await user.getIdToken();
+      const res = await fetch('/api/admin/bulk-action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ action, targetCollection: 'payments', targetIds: selectedIds.slice(0, 100) }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error ?? 'Action failed');
+      toast.success(action === 'forceVerifyPayment'
+        ? `Marked ${data?.updated ?? 0} payment(s) as success`
+        : `Permanently deleted ${data?.updated ?? 0} payment(s)`);
+      setRowSelection({});
+      refetch();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Action failed');
+    }
+  }, [user, selectedIds, refetch]);
 
   const handleExportCsv = useCallback(() => {
     const headers = ['Order ID', 'Name', 'Email', 'Pass Type', 'Amount', 'Status', 'Created', 'Updated'];
-    const rows = filteredPayments.map((p) => [
-      p.cashfreeOrderId || p.id,
-      p.name ?? '',
-      p.email ?? '',
-      p.passType ?? '',
-      p.amount,
-      p.status,
-      p.createdAt ?? '',
-      p.updatedAt ?? '',
-    ]);
+    const rows = filteredPayments.map((p) => [p.cashfreeOrderId || p.id, p.name ?? '', p.email ?? '', p.passType ?? '', p.amount, p.status, p.createdAt ?? '', p.updatedAt ?? '']);
     const escape = (v: unknown) => `"${String(v).replace(/"/g, '""')}"`;
     const csv = [headers.map(escape).join(','), ...rows.map((r) => r.map(escape).join(','))].join('\r\n');
     const blob = new Blob([csv], { type: 'text/csv; charset=utf-8' });
@@ -314,14 +318,8 @@ export default function PaymentsPage() {
             <div className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">Total Revenue</div>
             <div className="text-xl font-semibold tabular-nums text-emerald-400">₹{totalRevenue.toLocaleString('en-IN')}</div>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 hover:text-white"
-            onClick={handleExportCsv}
-          >
-            <IconDownload size={16} className="mr-1.5" />
-            Export CSV
+          <Button variant="outline" size="sm" className="border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 hover:text-white" onClick={handleExportCsv}>
+            <IconDownload size={16} className="mr-1.5" /> Export CSV
           </Button>
         </div>
       </div>
@@ -333,14 +331,12 @@ export default function PaymentsPage() {
           <Input
             placeholder="Search by Order ID, name, email, pass type..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value, tablePage: 1 }))}
             className="pl-9 bg-zinc-900 border-zinc-800 text-white placeholder:text-zinc-600 focus-visible:ring-zinc-700"
           />
         </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[140px] bg-zinc-900 border-zinc-800 text-zinc-300">
-            <SelectValue />
-          </SelectTrigger>
+        <Select value={statusFilter} onValueChange={(v) => setFilters((f) => ({ ...f, statusFilter: v, tablePage: 1 }))}>
+          <SelectTrigger className="w-[140px] bg-zinc-900 border-zinc-800 text-zinc-300"><SelectValue /></SelectTrigger>
           <SelectContent className="bg-zinc-800 border-zinc-700 text-zinc-300">
             <SelectItem value="all">All Status</SelectItem>
             <SelectItem value="success">Success</SelectItem>
@@ -348,72 +344,27 @@ export default function PaymentsPage() {
             <SelectItem value="failed">Failed</SelectItem>
           </SelectContent>
         </Select>
-        <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortKey)}>
-          <SelectTrigger className="w-[160px] bg-zinc-900 border-zinc-800 text-zinc-300">
-            <SelectValue placeholder="Sort by" />
-          </SelectTrigger>
+        <Select value={sortBy} onValueChange={(v) => setFilters((f) => ({ ...f, sortBy: v as SortKey, tablePage: 1 }))}>
+          <SelectTrigger className="w-[160px] bg-zinc-900 border-zinc-800 text-zinc-300"><SelectValue placeholder="Sort by" /></SelectTrigger>
           <SelectContent className="bg-zinc-800 border-zinc-700 text-zinc-300">
-            {SORT_OPTIONS.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-            ))}
+            {SORT_OPTIONS.map((opt) => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
           </SelectContent>
         </Select>
-        <Button
-          variant="outline"
-          size="sm"
-          className="bg-zinc-900 border-zinc-800 text-zinc-400 hover:bg-zinc-800 hover:text-white"
-          onClick={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
-        >
+        <Button variant="outline" size="sm" className="bg-zinc-900 border-zinc-800 text-zinc-400 hover:bg-zinc-800 hover:text-white"
+          onClick={() => setFilters((f) => ({ ...f, sortDir: f.sortDir === 'asc' ? 'desc' : 'asc', tablePage: 1 }))}>
           {sortDir === 'desc' ? 'Newest first' : 'Oldest first'}
         </Button>
       </div>
 
-      {error && (
-        <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4">
-          <p className="text-sm text-red-400">{error}</p>
-        </div>
-      )}
+      {error && <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4"><p className="text-sm text-red-400">{error}</p></div>}
 
-      {/* Bulk actions */}
       {selectedIds.length > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-zinc-800 bg-zinc-800/60 px-4 py-3">
-          <span className="text-sm text-zinc-300">
-            {selectedIds.length} selected
-          </span>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300"
-              onClick={runBulkForceVerify}
-            >
-              <IconCheck size={14} className="mr-1" />
-              Mark as success
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-red-400 hover:bg-red-500/10 hover:text-red-300"
-              onClick={() => {
-                if (typeof window !== 'undefined' && window.confirm(`Permanently delete ${selectedIds.length} payment(s) from the database? This cannot be undone.`)) {
-                  runBulkDelete();
-                }
-              }}
-            >
-              <IconTrash size={14} className="mr-1" />
-              Delete permanently
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-zinc-400 hover:bg-zinc-700 hover:text-white"
-              onClick={clearSelection}
-            >
-              <IconX size={14} className="mr-1" />
-              Clear
-            </Button>
-          </div>
-        </div>
+        <BulkActionsBar
+          count={selectedIds.length}
+          onVerify={() => runBulkAction('forceVerifyPayment')}
+          onDelete={() => runBulkAction('delete')}
+          onClear={clearSelection}
+        />
       )}
 
       {/* Table */}
@@ -423,80 +374,39 @@ export default function PaymentsPage() {
             <thead>
               <tr className="border-b border-zinc-800">
                 <th className="w-10 px-2 py-3">
-                  <Checkbox
-                    checked={isAllSelected ? true : isSomeSelected ? 'indeterminate' : false}
-                    onCheckedChange={(c) => selectAllOnPage(!!c)}
-                    aria-label="Select all on page"
-                    className="border-zinc-600 data-[state=checked]:bg-zinc-600 data-[state=checked]:border-zinc-600"
-                  />
+                  <Checkbox checked={isAllSelected ? true : isSomeSelected ? 'indeterminate' : false}
+                    onCheckedChange={(c) => selectAllOnPage(!!c)} aria-label="Select all on page"
+                    className="border-zinc-600 data-[state=checked]:bg-zinc-600 data-[state=checked]:border-zinc-600" />
                 </th>
-                <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-zinc-500">Order ID</th>
-                <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-zinc-500">Name</th>
-                <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-zinc-500">Email</th>
-                <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-zinc-500">Pass Type</th>
-                <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-zinc-500">Amount</th>
-                <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-zinc-500">Status</th>
-                <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-zinc-500">Created</th>
-                <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-zinc-500">Updated</th>
-                <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-zinc-500">Actions</th>
+                {['Order ID','Name','Email','Pass Type','Amount','Status','Created','Updated','Actions'].map((h) => (
+                  <th key={h} className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-zinc-500">{h}</th>
+                ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-800/50">
               {loading ? (
-                Array.from({ length: 6 }).map((_, i) => (
-                  <tr key={i}>
-                    {Array.from({ length: 10 }).map((_, j) => (
-                      <td key={j} className="px-4 py-3"><div className="h-4 w-20 animate-pulse rounded bg-zinc-800" /></td>
-                    ))}
-                  </tr>
+                SKELETON_ROWS.map((n) => (
+                  <tr key={n}>{SKELETON_CELLS.map((c) => <td key={c} className="px-4 py-3"><div className="h-4 w-20 animate-pulse rounded bg-zinc-800" /></td>)}</tr>
                 ))
               ) : totalFiltered === 0 ? (
-                <tr>
-                  <td colSpan={10} className="px-4 py-12 text-center text-sm text-zinc-500">No payments found</td>
-                </tr>
+                <tr><td colSpan={10} className="px-4 py-12 text-center text-sm text-zinc-500">No payments found</td></tr>
               ) : (
                 paginatedPayments.map((p) => (
-                  <tr
-                    key={p.id}
-                    className={`hover:bg-zinc-800/50 transition-colors ${rowSelection[p.id] ? 'bg-zinc-800/60' : ''}`}
-                  >
+                  <tr key={p.id} className={`hover:bg-zinc-800/50 transition-colors ${rowSelection[p.id] ? 'bg-zinc-800/60' : ''}`}>
                     <td className="px-2 py-3" onClick={(e) => e.stopPropagation()}>
-                      <Checkbox
-                        checked={!!rowSelection[p.id]}
-                        onCheckedChange={() => toggleSelection(p.id)}
-                        aria-label="Select row"
-                        className="border-zinc-600 data-[state=checked]:bg-zinc-600 data-[state=checked]:border-zinc-600"
-                      />
+                      <Checkbox checked={!!rowSelection[p.id]} onCheckedChange={() => toggleSelection(p.id)} aria-label="Select row"
+                        className="border-zinc-600 data-[state=checked]:bg-zinc-600 data-[state=checked]:border-zinc-600" />
                     </td>
                     <td className="px-4 py-3 text-sm font-mono text-zinc-400">{p.cashfreeOrderId || p.id.slice(0, 12)}</td>
                     <td className="px-4 py-3 text-sm text-white">{p.name ?? '—'}</td>
                     <td className="px-4 py-3 text-sm text-zinc-400 max-w-[200px] truncate" title={p.email ?? undefined}>{p.email ?? '—'}</td>
-                    <td className="px-4 py-3">
-                      <span className="inline-flex rounded-md bg-zinc-800 px-2 py-0.5 text-xs font-medium text-zinc-300">
-                        {p.passType || '—'}
-                      </span>
-                    </td>
+                    <td className="px-4 py-3"><span className="inline-flex rounded-md bg-zinc-800 px-2 py-0.5 text-xs font-medium text-zinc-300">{p.passType || '—'}</span></td>
                     <td className="px-4 py-3 text-sm font-medium tabular-nums text-white">₹{p.amount}</td>
+                    <td className="px-4 py-3"><span className={`inline-flex rounded-md px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[p.status] ?? 'bg-zinc-800 text-zinc-400'}`}>{p.status.charAt(0).toUpperCase() + p.status.slice(1)}</span></td>
+                    <td className="px-4 py-3 text-sm tabular-nums text-zinc-400 whitespace-nowrap">{p.createdAt ? dateFmt.format(new Date(p.createdAt)) : '—'}</td>
+                    <td className="px-4 py-3 text-sm tabular-nums text-zinc-400 whitespace-nowrap">{p.updatedAt ? dateFmt.format(new Date(p.updatedAt)) : '—'}</td>
                     <td className="px-4 py-3">
-                      <span className={`inline-flex rounded-md px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[p.status] ?? 'bg-zinc-800 text-zinc-400'}`}>
-                        {p.status.charAt(0).toUpperCase() + p.status.slice(1)}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-sm tabular-nums text-zinc-400 whitespace-nowrap">
-                      {p.createdAt ? dateFmt.format(new Date(p.createdAt)) : '—'}
-                    </td>
-                    <td className="px-4 py-3 text-sm tabular-nums text-zinc-400 whitespace-nowrap">
-                      {p.updatedAt ? dateFmt.format(new Date(p.updatedAt)) : '—'}
-                    </td>
-                    <td className="px-4 py-3">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-xs text-zinc-400 hover:text-white hover:bg-zinc-800"
-                        onClick={() => openEdit(p)}
-                      >
-                        Edit
-                      </Button>
+                      <Button variant="ghost" size="sm" className="text-xs text-zinc-400 hover:text-white hover:bg-zinc-800" onClick={() => openEdit(p)}>Edit</Button>
                     </td>
                   </tr>
                 ))
@@ -506,94 +416,30 @@ export default function PaymentsPage() {
         </div>
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-zinc-800 bg-zinc-950 px-4 py-3">
           <span className="text-xs text-zinc-500">
-            {totalFiltered === 0
-              ? '0 payments'
-              : `Showing ${(tablePage - 1) * PAGE_SIZE + 1}-${Math.min(tablePage * PAGE_SIZE, totalFiltered)} of ${totalFiltered}`}
+            {totalFiltered === 0 ? '0 payments' : `Showing ${(tablePage - 1) * PAGE_SIZE + 1}–${Math.min(tablePage * PAGE_SIZE, totalFiltered)} of ${totalFiltered}`}
           </span>
           <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={tablePage <= 1}
-              onClick={() => setTablePage((p) => p - 1)}
-              className="rounded-md bg-zinc-800 px-3 py-1 text-zinc-300 hover:bg-zinc-700 disabled:opacity-40"
-            >
+            <Button variant="ghost" size="sm" disabled={tablePage <= 1}
+              onClick={() => setFilters((f) => ({ ...f, tablePage: f.tablePage - 1 }))}
+              className="rounded-md bg-zinc-800 px-3 py-1 text-zinc-300 hover:bg-zinc-700 disabled:opacity-40">
               <IconChevronLeft size={16} />
             </Button>
-            <span className="text-xs tabular-nums text-zinc-500">
-              Page {tablePage} of {totalTablePages}
-            </span>
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={tablePage >= totalTablePages}
-              onClick={() => setTablePage((p) => p + 1)}
-              className="rounded-md bg-zinc-800 px-3 py-1 text-zinc-300 hover:bg-zinc-700 disabled:opacity-40"
-            >
+            <span className="text-xs tabular-nums text-zinc-500">Page {tablePage} of {totalTablePages}</span>
+            <Button variant="ghost" size="sm" disabled={tablePage >= totalTablePages}
+              onClick={() => setFilters((f) => ({ ...f, tablePage: f.tablePage + 1 }))}
+              className="rounded-md bg-zinc-800 px-3 py-1 text-zinc-300 hover:bg-zinc-700 disabled:opacity-40">
               <IconChevronRight size={16} />
             </Button>
           </div>
         </div>
       </div>
 
-      {/* Edit Sheet */}
-      <Sheet open={!!editPayment} onOpenChange={(open) => !open && setEditPayment(null)}>
-        <SheetContent side="right" className="bg-zinc-900 border-zinc-800 text-white">
-          <SheetHeader>
-            <SheetTitle className="text-white">Edit Payment</SheetTitle>
-          </SheetHeader>
-          {editPayment && (
-            <div className="mt-6 space-y-4">
-              <div>
-                <Label className="text-zinc-400 text-xs uppercase tracking-wider">Order ID</Label>
-                <p className="mt-1 text-sm font-mono text-zinc-300">{editPayment.cashfreeOrderId || editPayment.id}</p>
-              </div>
-              <div>
-                <Label className="text-zinc-400 text-xs uppercase tracking-wider">Amount</Label>
-                <p className="mt-1 text-sm font-medium text-white">₹{editPayment.amount}</p>
-              </div>
-              <div>
-                <Label className="text-zinc-400 text-xs uppercase tracking-wider">Status</Label>
-                <Select value={formStatus} onValueChange={(v) => setFormStatus(v as 'pending' | 'success' | 'failed')}>
-                  <SelectTrigger className="mt-1.5 bg-zinc-800 border-zinc-700 text-zinc-300">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-zinc-800 border-zinc-700 text-zinc-300">
-                    <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="success">Success</SelectItem>
-                    <SelectItem value="failed">Failed</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label className="text-zinc-400 text-xs uppercase tracking-wider">Admin Note</Label>
-                <Input
-                  value={formNote}
-                  onChange={(e) => setFormNote(e.target.value)}
-                  placeholder="Optional note..."
-                  className="mt-1.5 bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-600"
-                />
-              </div>
-            </div>
-          )}
-          <SheetFooter className="mt-8">
-            <Button
-              variant="outline"
-              onClick={() => setEditPayment(null)}
-              className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={savePayment}
-              disabled={saving}
-              className="bg-white text-zinc-900 hover:bg-zinc-200"
-            >
-              {saving ? 'Saving...' : 'Save'}
-            </Button>
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
+      <PaymentEditSheet
+        editState={editState}
+        onClose={closeEdit}
+        onSave={savePayment}
+        onFormChange={(patch) => setEditState((s) => ({ ...s, ...patch }))}
+      />
     </div>
   );
 }

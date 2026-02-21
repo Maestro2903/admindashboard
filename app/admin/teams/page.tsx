@@ -32,6 +32,9 @@ interface Team {
   passId?: string;
 }
 
+const SKELETON_ROWS = [1, 2, 3, 4, 5] as const;
+const SKELETON_CELLS = [1, 2, 3, 4, 5, 6, 7, 8] as const;
+
 export default function TeamsPage() {
   const { user, loading: authLoading } = useAuth();
   const [teams, setTeams] = React.useState<Team[]>([]);
@@ -47,13 +50,11 @@ export default function TeamsPage() {
       try {
         setLoading(true);
         const token = await user.getIdToken();
-        // Fetch teams from passes API (group_events type)
         const res = await fetch('/api/admin/passes?type=group_events&pageSize=200&includeSummary=1', {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (!res.ok) throw new Error('Failed to fetch teams');
         const data = await res.json();
-        // Extract teams from records
         const teamMap = new Map<string, Team>();
         for (const record of data.records ?? []) {
           if (record.team) {
@@ -184,10 +185,10 @@ export default function TeamsPage() {
             </thead>
             <tbody className="divide-y divide-zinc-800/50">
               {loading ? (
-                Array.from({ length: 5 }).map((_, i) => (
-                  <tr key={i}>
-                    {Array.from({ length: 8 }).map((_, j) => (
-                      <td key={j} className="px-4 py-3"><div className="h-4 w-20 animate-pulse rounded bg-zinc-800" /></td>
+                SKELETON_ROWS.map((n) => (
+                  <tr key={n}>
+                    {SKELETON_CELLS.map((c) => (
+                      <td key={c} className="px-4 py-3"><div className="h-4 w-20 animate-pulse rounded bg-zinc-800" /></td>
                     ))}
                   </tr>
                 ))
@@ -203,11 +204,19 @@ export default function TeamsPage() {
                   return (
                     <React.Fragment key={team.id}>
                       <tr
+                        role="button"
+                        tabIndex={0}
                         className="hover:bg-zinc-800/50 transition-colors cursor-pointer"
                         onClick={() => toggleExpanded(team.id)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            toggleExpanded(team.id);
+                          }
+                        }}
                       >
                         <td className="px-3 py-3">
-                          <button className="text-zinc-500 hover:text-zinc-300">
+                          <button className="text-zinc-500 hover:text-zinc-300" tabIndex={-1}>
                             {expandedRows.has(team.id) ? <IconChevronDown size={16} /> : <IconChevronRight size={16} />}
                           </button>
                         </td>
@@ -242,8 +251,8 @@ export default function TeamsPage() {
                         <tr>
                           <td colSpan={8} className="bg-zinc-950 px-8 py-4">
                             <div className="space-y-1">
-                              {team.members.map((m, i) => (
-                                <div key={i} className="flex items-center gap-4 rounded-lg bg-zinc-900 px-3 py-2 text-sm">
+                              {team.members.map((m) => (
+                                <div key={m.phone || m.name} className="flex items-center gap-4 rounded-lg bg-zinc-900 px-3 py-2 text-sm">
                                   <span className={`h-2 w-2 rounded-full shrink-0 ${m.attendance?.checkedIn ? 'bg-emerald-500' : 'bg-zinc-600'}`} />
                                   <span className="text-zinc-300 min-w-[150px]">{m.name}</span>
                                   <span className="text-zinc-500 tabular-nums">{formatPhone(m.phone)}</span>

@@ -1,55 +1,31 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback } from 'react';
+import { redirect } from 'next/navigation';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/features/auth/AuthContext';
 import { AppSidebar } from '@/components/admin/AppSidebar';
+import { useMeRole } from '@/hooks/use-me-role';
 
 export function AdminPanelShell({ children }: { children: React.ReactNode }) {
   const { user, userData, loading, signOut } = useAuth();
   const router = useRouter();
   const hasAccess = !loading && Boolean(user) && Boolean(userData?.isOrganizer);
-  const [adminRole, setAdminRole] = useState<string | undefined>(userData?.adminRole);
 
-  useEffect(() => {
-    if (loading) return;
-    if (!user || !userData?.isOrganizer) {
-      router.replace('/signin');
-    }
-  }, [loading, user, userData, router]);
+  // Redirect unauthenticated users during render (no useEffect needed)
+  if (!loading && (!user || !userData?.isOrganizer)) {
+    redirect('/signin');
+  }
 
-  useEffect(() => {
-    if (!hasAccess || !user) return;
-    let cancelled = false;
-    user.getIdToken().then((idToken) => {
-      if (cancelled) return;
-      fetch('/api/me', {
-        headers: { Authorization: `Bearer ${idToken}` },
-      })
-        .then((res) => {
-          if (!cancelled && !res.ok) {
-            router.replace('/signin');
-            return;
-          }
-          return res.json();
-        })
-        .then((data) => {
-          if (!cancelled && data?.adminRole) {
-            setAdminRole(data.adminRole);
-          }
-        })
-        .catch(() => {});
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [hasAccess, user, router]);
+  const onUnauthorized = useCallback(() => {
+    router.replace('/signin');
+  }, [router]);
 
-  useEffect(() => {
-    if (userData?.adminRole) {
-      setAdminRole(userData.adminRole);
-    }
-  }, [userData?.adminRole]);
+  // Fetch adminRole via custom hook (no fetch-in-useEffect in component body)
+  const fetchedRole = useMeRole({ user, hasAccess, signOut, onUnauthorized });
+
+  // Merge fetched role with userData role (userData is the fastest source on first render)
+  const adminRole = fetchedRole ?? userData?.adminRole;
 
   if (!hasAccess) {
     return (

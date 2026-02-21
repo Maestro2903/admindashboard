@@ -1,7 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useAuth } from '@/features/auth/AuthContext';
+import { useUsers } from '@/hooks/use-users';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -30,34 +31,27 @@ interface UserRecord {
   isArchived?: boolean;
 }
 
+const SKELETON_ROWS = [1, 2, 3, 4, 5, 6, 7, 8] as const;
+const SKELETON_CELLS = [1, 2, 3, 4, 5, 6, 7] as const;
+
+const EMPTY_FORM = { name: '', phone: '', college: '', isOrganizer: false };
+
 export default function UsersPage() {
   const { user } = useAuth();
-  const [users, setUsers] = useState<UserRecord[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { users, loading, error, refetch } = useUsers(user ?? null);
   const [editUser, setEditUser] = useState<UserRecord | null>(null);
   const [saving, setSaving] = useState(false);
-  const [formName, setFormName] = useState('');
-  const [formPhone, setFormPhone] = useState('');
-  const [formCollege, setFormCollege] = useState('');
-  const [formIsOrganizer, setFormIsOrganizer] = useState(false);
+  const [form, setForm] = useState(EMPTY_FORM);
   const [search, setSearch] = useState('');
-
-  const refetch = useCallback(() => {
-    if (!user) return;
-    user.getIdToken().then((token) =>
-      fetch('/api/users', { headers: { Authorization: `Bearer ${token}` } })
-        .then((res) => res.json())
-        .then((data) => setUsers(data.users || []))
-    );
-  }, [user]);
 
   const openEdit = (u: UserRecord) => {
     setEditUser(u);
-    setFormName(u.name ?? '');
-    setFormPhone(u.phone ?? '');
-    setFormCollege(u.college ?? '');
-    setFormIsOrganizer(u.isOrganizer ?? false);
+    setForm({
+      name: u.name ?? '',
+      phone: u.phone ?? '',
+      college: u.college ?? '',
+      isOrganizer: u.isOrganizer ?? false,
+    });
   };
 
   const saveUser = async () => {
@@ -70,10 +64,10 @@ export default function UsersPage() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           userId: editUser.id,
-          name: formName || undefined,
-          phone: formPhone || undefined,
-          college: formCollege || undefined,
-          isOrganizer: formIsOrganizer,
+          name: form.name || undefined,
+          phone: form.phone || undefined,
+          college: form.college || undefined,
+          isOrganizer: form.isOrganizer,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -98,32 +92,6 @@ export default function UsersPage() {
       }),
     []
   );
-
-  useEffect(() => {
-    if (!user) { setLoading(false); return; }
-    const controller = new AbortController();
-    (async () => {
-      try {
-        setLoading(true);
-        const token = await user.getIdToken();
-        const res = await fetch('/api/users', {
-          headers: { Authorization: `Bearer ${token}` },
-          signal: controller.signal,
-        });
-        if (!res.ok) throw new Error(`Failed: ${res.status}`);
-        const data = await res.json();
-        setUsers(data.users || []);
-        setError(null);
-      } catch (err) {
-        if (!controller.signal.aborted) {
-          setError(err instanceof Error ? err.message : 'Unknown error');
-        }
-      } finally {
-        if (!controller.signal.aborted) setLoading(false);
-      }
-    })();
-    return () => controller.abort();
-  }, [user]);
 
   const filteredUsers = useMemo(() => {
     if (!search.trim()) return users;
@@ -180,10 +148,10 @@ export default function UsersPage() {
             </thead>
             <tbody className="divide-y divide-zinc-800/50">
               {loading ? (
-                Array.from({ length: 8 }).map((_, i) => (
-                  <tr key={i}>
-                    {Array.from({ length: 7 }).map((_, j) => (
-                      <td key={j} className="px-4 py-3"><div className="h-4 w-20 animate-pulse rounded bg-zinc-800" /></td>
+                SKELETON_ROWS.map((n) => (
+                  <tr key={n}>
+                    {SKELETON_CELLS.map((c) => (
+                      <td key={c} className="px-4 py-3"><div className="h-4 w-20 animate-pulse rounded bg-zinc-800" /></td>
                     ))}
                   </tr>
                 ))
@@ -247,34 +215,37 @@ export default function UsersPage() {
                 <p className="mt-1 text-sm text-zinc-300">{editUser.email}</p>
               </div>
               <div>
-                <Label className="text-zinc-400 text-xs uppercase tracking-wider">Name</Label>
+                <Label htmlFor="edit-user-name" className="text-zinc-400 text-xs uppercase tracking-wider">Name</Label>
                 <Input
-                  value={formName}
-                  onChange={(e) => setFormName(e.target.value)}
+                  id="edit-user-name"
+                  value={form.name}
+                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                   className="mt-1.5 bg-zinc-800 border-zinc-700 text-white"
                 />
               </div>
               <div>
-                <Label className="text-zinc-400 text-xs uppercase tracking-wider">Phone</Label>
+                <Label htmlFor="edit-user-phone" className="text-zinc-400 text-xs uppercase tracking-wider">Phone</Label>
                 <Input
-                  value={formPhone}
-                  onChange={(e) => setFormPhone(e.target.value)}
+                  id="edit-user-phone"
+                  value={form.phone}
+                  onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
                   className="mt-1.5 bg-zinc-800 border-zinc-700 text-white"
                 />
               </div>
               <div>
-                <Label className="text-zinc-400 text-xs uppercase tracking-wider">College</Label>
+                <Label htmlFor="edit-user-college" className="text-zinc-400 text-xs uppercase tracking-wider">College</Label>
                 <Input
-                  value={formCollege}
-                  onChange={(e) => setFormCollege(e.target.value)}
+                  id="edit-user-college"
+                  value={form.college}
+                  onChange={(e) => setForm((f) => ({ ...f, college: e.target.value }))}
                   className="mt-1.5 bg-zinc-800 border-zinc-700 text-white"
                 />
               </div>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
-                  checked={formIsOrganizer}
-                  onChange={(e) => setFormIsOrganizer(e.target.checked)}
+                  checked={form.isOrganizer}
+                  onChange={(e) => setForm((f) => ({ ...f, isOrganizer: e.target.checked }))}
                   className="rounded border-zinc-600 bg-zinc-800"
                 />
                 <span className="text-sm text-zinc-300">Promote to Organizer</span>

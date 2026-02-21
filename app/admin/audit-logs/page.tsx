@@ -1,22 +1,12 @@
 'use client';
 
 import * as React from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
+
 import { useAuth } from '@/features/auth/AuthContext';
+import { useAuditLogs } from '@/hooks/use-audit-logs';
 import { Input } from '@/components/ui/input';
 import { IconSearch } from '@tabler/icons-react';
-
-interface AuditLog {
-  id: string;
-  adminId: string;
-  action: string;
-  targetCollection: string;
-  targetId: string;
-  previousData?: Record<string, unknown> | null;
-  newData?: Record<string, unknown> | null;
-  ipAddress?: string | null;
-  timestamp: string;
-}
 
 const ACTION_COLORS: Record<string, string> = {
   markUsed: 'bg-emerald-500/10 text-emerald-400',
@@ -30,35 +20,14 @@ const ACTION_COLORS: Record<string, string> = {
   updateTeam: 'bg-purple-500/10 text-purple-400',
 };
 
+const SKELETON_ROWS = [1, 2, 3, 4, 5, 6, 7, 8] as const;
+const SKELETON_CELLS = [1, 2, 3, 4, 5, 6] as const;
+
 export default function AuditLogsPage() {
   const { user, loading: authLoading } = useAuth();
-  const [logs, setLogs] = useState<AuditLog[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { logs, loading, error } = useAuditLogs(user, authLoading);
   const [search, setSearch] = useState('');
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-
-  useEffect(() => {
-    if (authLoading || !user) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        setLoading(true);
-        const token = await user.getIdToken();
-        const res = await fetch('/api/admin/logs?limit=100', {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok) throw new Error(`Failed: ${res.status}`);
-        const data = await res.json();
-        if (!cancelled) setLogs(data.logs ?? []);
-      } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load logs');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [authLoading, user]);
 
   const dateFmt = useMemo(
     () =>
@@ -132,10 +101,10 @@ export default function AuditLogsPage() {
             </thead>
             <tbody className="divide-y divide-zinc-800/50">
               {loading ? (
-                Array.from({ length: 8 }).map((_, i) => (
-                  <tr key={i}>
-                    {Array.from({ length: 6 }).map((_, j) => (
-                      <td key={j} className="px-4 py-3"><div className="h-4 w-20 animate-pulse rounded bg-zinc-800" /></td>
+                SKELETON_ROWS.map((n) => (
+                  <tr key={n}>
+                    {SKELETON_CELLS.map((c) => (
+                      <td key={c} className="px-4 py-3"><div className="h-4 w-20 animate-pulse rounded bg-zinc-800" /></td>
                     ))}
                   </tr>
                 ))
@@ -147,8 +116,16 @@ export default function AuditLogsPage() {
                 filteredLogs.map((log) => (
                   <React.Fragment key={log.id}>
                     <tr
+                      role="button"
+                      tabIndex={0}
                       className="hover:bg-zinc-800/50 transition-colors cursor-pointer"
                       onClick={() => toggleExpanded(log.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          toggleExpanded(log.id);
+                        }
+                      }}
                     >
                       <td className="px-4 py-3 text-sm tabular-nums text-zinc-400 whitespace-nowrap">
                         {dateFmt.format(new Date(log.timestamp))}

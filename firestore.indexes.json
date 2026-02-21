@@ -17,13 +17,6 @@
       ]
     },
     {
-      "collectionGroup": "admin_logs",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "timestamp", "order": "DESCENDING" }
-      ]
-    },
-    {
       "collectionGroup": "passes",
       "queryScope": "COLLECTION",
       "fields": [

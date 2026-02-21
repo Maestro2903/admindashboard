@@ -26,10 +26,14 @@ let _redis: Redis | null = null;
 
 function getRedis(): Redis | null {
   if (_redis) return _redis;
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  const url = (process.env.UPSTASH_REDIS_REST_URL ?? '').trim();
+  const token = (process.env.UPSTASH_REDIS_REST_TOKEN ?? '').trim();
   if (!url || !token) return null;
-  _redis = new Redis({ url, token });
+  try {
+    _redis = new Redis({ url, token });
+  } catch {
+    return null;
+  }
   return _redis;
 }
 
@@ -150,7 +154,13 @@ function getCategory(req: NextRequest): CategoryConfig {
 export async function middleware(req: NextRequest): Promise<NextResponse> {
   const { category, limit, window } = getCategory(req);
   const identifier = getIdentifier(req);
-  const limiter = getLimiter(category, limit, window);
+
+  let limiter: Ratelimit | null;
+  try {
+    limiter = getLimiter(category, limit, window);
+  } catch {
+    return NextResponse.next();
+  }
 
   // Redis not configured → pass through without rate limiting.
   if (!limiter) {

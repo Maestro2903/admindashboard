@@ -206,7 +206,6 @@ export default function LiveCheckinPage() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             className="flex-1 bg-zinc-900 border-zinc-800 text-white text-lg h-12 placeholder:text-zinc-600 focus-visible:ring-zinc-700"
-            autoFocus
             disabled={loading}
           />
           <Button

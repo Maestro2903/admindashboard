@@ -31,6 +31,15 @@ function normalizePrivateKey(raw: string): string {
   return key;
 }
 
+/**
+ * Strip trailing literal \n (backslash-n) characters and actual newlines/whitespace
+ * that can appear when env vars are pasted into Vercel with a trailing newline.
+ */
+function cleanEnvString(s: string): string {
+  // Remove literal \n (backslash + n as two chars) at the end, then trim whitespace
+  return s.replace(/\\n$/, '').trim();
+}
+
 function getAdminApp() {
   if (admin.apps.length > 0) return admin.app();
 
@@ -44,13 +53,14 @@ function getAdminApp() {
     credential = admin.credential.cert(JSON.parse(serviceAccountKey) as admin.ServiceAccount);
   } else if (clientEmail && privateKey) {
     const normalizedKey = normalizePrivateKey(privateKey);
-    const projectId = process.env.FIREBASE_PROJECT_ID || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+    const rawProjectId = process.env.FIREBASE_PROJECT_ID || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+    const projectId = rawProjectId ? cleanEnvString(rawProjectId) : undefined;
     if (!projectId) {
       throw new Error('Firebase project ID is missing. Set FIREBASE_PROJECT_ID or NEXT_PUBLIC_FIREBASE_PROJECT_ID.');
     }
     credential = admin.credential.cert({
-      projectId: projectId,
-      clientEmail: clientEmail.trim(),
+      projectId,
+      clientEmail: cleanEnvString(clientEmail),
       privateKey: normalizedKey,
     });
   } else {
@@ -59,7 +69,8 @@ function getAdminApp() {
     );
   }
 
-  const projectId = process.env.FIREBASE_PROJECT_ID || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+  const rawProjectId = process.env.FIREBASE_PROJECT_ID || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+  const projectId = rawProjectId ? cleanEnvString(rawProjectId) : undefined;
   return admin.initializeApp({
     credential,
     projectId: projectId || undefined,

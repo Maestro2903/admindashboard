@@ -79,36 +79,40 @@ export default function PassExplorerPage() {
         ? (['day_pass', 'group_events', 'proshow', 'sana_concert'] as const)
         : ([passType] as const);
 
-      const results: PassManagementResponse[] = [];
-      const failedTypes: string[] = [];
-
-      for (const pt of types) {
-        try {
-          const params = new URLSearchParams();
-          params.set('type', pt);
-          params.set('page', String(page));
-          params.set('pageSize', '100');
-          params.set('includeSummary', '1');
-          let res = await fetch(`/api/admin/passes?${params.toString()}`, {
+      const fetchOne = async (pt: string): Promise<{ ok: true; data: PassManagementResponse } | { ok: false; type: string; err: Error }> => {
+        const params = new URLSearchParams();
+        params.set('type', pt);
+        params.set('page', String(page));
+        params.set('pageSize', '100');
+        params.set('includeSummary', '1');
+        let res = await fetch(`/api/admin/passes?${params.toString()}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.status === 401) {
+          token = await user.getIdToken(true);
+          res = await fetch(`/api/admin/passes?${params.toString()}`, {
             headers: { Authorization: `Bearer ${token}` },
           });
-          if (res.status === 401) {
-            token = await user.getIdToken(true);
-            res = await fetch(`/api/admin/passes?${params.toString()}`, {
-              headers: { Authorization: `Bearer ${token}` },
-            });
-          }
-          if (!res.ok) {
-            const errData = await res.json().catch(() => ({}));
-            throw new Error(errData?.error ?? `HTTP ${res.status}`);
-          }
-          const json = (await res.json()) as PassManagementResponse;
-          results.push(json);
-        } catch (err) {
-          failedTypes.push(pt);
+        }
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          return { ok: false, type: pt, err: new Error(errData?.error ?? `HTTP ${res.status}`) };
+        }
+        const json = (await res.json()) as PassManagementResponse;
+        return { ok: true, data: json };
+      };
+
+      const settled = await Promise.all(types.map((pt) => fetchOne(pt)));
+      const results: PassManagementResponse[] = [];
+      const failedTypes: string[] = [];
+      for (const s of settled) {
+        if (s.ok) results.push(s.data);
+        else {
+          failedTypes.push(s.type);
           if (passType !== 'all') {
-            setError(err instanceof Error ? err.message : `Failed to fetch ${pt}`);
+            setError(s.err.message);
             setData(null);
+            setLoading(false);
             return;
           }
         }

@@ -57,14 +57,25 @@ export async function GET(req: NextRequest) {
     const revenue = successPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
     const pendingPayments = payments.filter((p) => p.status === 'pending').length;
 
+    // Build paymentId -> status map for pass distribution (only count passes with success payment, not archived)
+    const paymentStatusById = new Map<string, string>();
+    for (const doc of paymentsSnap.docs) {
+      const d = doc.data() as Record<string, unknown>;
+      const st = d?.status;
+      if (typeof st === 'string') paymentStatusById.set(doc.id, st);
+    }
+
     const activePasses = passes.filter((p) => p.status === 'paid').length;
     const usedPasses = passes.filter((p) => p.status === 'used').length;
     const teamsRegistered = teamsSnap.size;
     const totalUsers = usersCountAgg.data()?.count ?? 0;
 
-    // Pass distribution
+    // Pass distribution: only count passes that have success payment and are not archived (matches admin passes list)
     const passDistribution: Record<string, number> = {};
     for (const p of passes) {
+      if (p.isArchived === true) continue;
+      const paymentId = getString(p, 'paymentId');
+      if (paymentId && paymentStatusById.get(paymentId) !== 'success') continue;
       const pt = getString(p, 'passType');
       if (pt && !/test/i.test(pt)) {
         passDistribution[pt] = (passDistribution[pt] ?? 0) + 1;

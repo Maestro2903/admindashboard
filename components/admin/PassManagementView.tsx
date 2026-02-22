@@ -124,7 +124,7 @@ export function PassManagementView({
       setLoading(true);
       setError(null);
       try {
-        const token = await user.getIdToken();
+        const token = await user.getIdToken(false);
         const res = await fetch(`/api/admin/passes?${queryString}`, {
           headers: { Authorization: `Bearer ${token}` },
         });

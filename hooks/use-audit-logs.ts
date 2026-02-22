@@ -30,7 +30,7 @@ export function useAuditLogs(user: User | null, authLoading: boolean): UseAuditL
     (async () => {
       try {
         setLoading(true);
-        const token = await user.getIdToken();
+        const token = await user.getIdToken(false);
         const res = await fetch('/api/admin/logs?limit=100', {
           headers: { Authorization: `Bearer ${token}` },
         });

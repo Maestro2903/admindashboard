@@ -29,7 +29,7 @@ export default function AdminEventsPage() {
 
   const refetch = React.useCallback(() => {
     if (!user) return;
-    user.getIdToken().then((token) =>
+    user.getIdToken(false).then((token) =>
       fetch('/api/admin/events?activeOnly=0', { headers: { Authorization: `Bearer ${token}` } })
         .then((res) => res.json())
         .then((data) => setEvents((data as { events: AdminEvent[] }).events ?? []))
@@ -46,7 +46,7 @@ export default function AdminEventsPage() {
     if (!editEvent || !user) return;
     setSaving(true);
     try {
-      const token = await user.getIdToken();
+      const token = await user.getIdToken(false);
       const res = await fetch('/api/admin/update-event', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -80,7 +80,7 @@ export default function AdminEventsPage() {
       try {
         setLoading(true);
         setError(null);
-        const token = await user.getIdToken();
+        const token = await user.getIdToken(false);
         const res = await fetch('/api/admin/events?activeOnly=0', {
           headers: { Authorization: `Bearer ${token}` },
         });

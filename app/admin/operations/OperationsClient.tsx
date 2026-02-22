@@ -182,7 +182,7 @@ function OperationsClientInner() {
     let cancelled = false;
     (async () => {
       try {
-        const token = await user.getIdToken();
+        const token = await user.getIdToken(false);
         const resp = await fetchJson<{ events: AdminEvent[] }>('/api/admin/events?activeOnly=1', token);
         if (!cancelled) setEvents(resp.events || []);
       } catch (e) {
@@ -216,7 +216,7 @@ function OperationsClientInner() {
         try {
           setLoading(true);
           setError(null);
-          const token = await user.getIdToken();
+          const token = await user.getIdToken(false);
           const resp = await fetchJson<OperationsDashboardResponse>(
             `/api/admin/unified-dashboard?${queryString}`,
             token
@@ -244,7 +244,7 @@ function OperationsClientInner() {
       if (eventId && eventId !== 'all') params.set('eventId', eventId);
       if (dateFrom) params.set('from', dateFrom);
       if (dateTo) params.set('to', dateTo);
-      const token = await user.getIdToken();
+      const token = await user.getIdToken(false);
       const res = await fetch(`/api/admin/unified-dashboard?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -506,7 +506,7 @@ function OperationsClientInner() {
         selectedRecords={selectedRecords}
         onClearSelection={() => setRowSelection({})}
         onSuccess={() => setRefreshKey((k) => k + 1)}
-        getToken={async () => (user ? user.getIdToken() : '')}
+        getToken={async () => (user ? user.getIdToken(false) : '')}
       />
 
       {/* Detail Drawer */}
@@ -518,7 +518,7 @@ function OperationsClientInner() {
           setDetailRecord(null);
           setRefreshKey((k) => k + 1);
         }}
-        getToken={async () => (user ? user.getIdToken() : '')}
+        getToken={async () => (user ? user.getIdToken(false) : '')}
       />
     </div>
   );

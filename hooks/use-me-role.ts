@@ -28,7 +28,7 @@ export function useMeRole({ user, hasAccess, signOut, onUnauthorized }: UseMeRol
     hasFetched.current = true;
 
     const doFetch = async () => {
-      let idToken = await user.getIdToken();
+      let idToken = await user.getIdToken(false);
       if (cancelled) return;
 
       let res = await fetch('/api/me', {

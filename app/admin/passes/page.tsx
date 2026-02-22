@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { useAuth } from '@/features/auth/AuthContext';
+import { getCache, setCache, invalidateCachePrefix } from '@/lib/clientCache';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -62,10 +63,17 @@ export default function PassExplorerPage() {
 
   const fetchData = React.useCallback(async () => {
     if (!user) return;
+    const cacheKey = `passes-${passType}-${page}-100`;
+    const cached = getCache<{ records: PassManagementRecord[]; page: number; pageSize: number; summary: NonNullable<PassManagementResponse['summary']> }>(cacheKey, 5 * 60 * 1000);
+    if (cached) {
+      setData(cached);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
-      const token = await user.getIdToken();
+      let token = await user.getIdToken(false);
 
       const types = passType === 'all'
         ? (['day_pass', 'group_events', 'proshow', 'sana_concert'] as const)
@@ -81,9 +89,15 @@ export default function PassExplorerPage() {
           params.set('page', String(page));
           params.set('pageSize', '100');
           params.set('includeSummary', '1');
-          const res = await fetch(`/api/admin/passes?${params.toString()}`, {
+          let res = await fetch(`/api/admin/passes?${params.toString()}`, {
             headers: { Authorization: `Bearer ${token}` },
           });
+          if (res.status === 401) {
+            token = await user.getIdToken(true);
+            res = await fetch(`/api/admin/passes?${params.toString()}`, {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+          }
           if (!res.ok) {
             const errData = await res.json().catch(() => ({}));
             throw new Error(errData?.error ?? `HTTP ${res.status}`);
@@ -117,12 +131,14 @@ export default function PassExplorerPage() {
         { totalSold: 0, totalRevenue: 0, totalUsed: 0, remaining: 0 }
       );
 
-      setData({
+      const payload = {
         records: allRecords,
         page,
         pageSize: 100,
         summary: mergedSummary,
-      });
+      };
+      setData(payload);
+      setCache(cacheKey, payload);
 
       if (failedTypes.length > 0) {
         setError(`Could not load: ${failedTypes.join(', ')}. Other pass types loaded. Check Firestore indexes if this persists.`);
@@ -135,21 +151,24 @@ export default function PassExplorerPage() {
     }
   }, [user, passType, page, refreshKey]);
 
+  // Refetch only when auth or real params change — not when fetchData identity changes
   React.useEffect(() => {
     if (authLoading || !user) return;
     fetchData();
-  }, [authLoading, user, fetchData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- deps are passType, page, refreshKey via fetchData closure
+  }, [authLoading, user, passType, page, refreshKey]);
 
   const handleMarkUsed = React.useCallback(async (passId: string) => {
     if (!user) return;
     try {
-      const token = await user.getIdToken();
+      const token = await user.getIdToken(false);
       const res = await fetch(`/api/admin/passes/${passId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ action: 'markUsed' }),
       });
       if (!res.ok) throw new Error('Failed to mark pass');
+      invalidateCachePrefix('passes');
       toast.success('Pass marked as used');
       setRefreshKey((k) => k + 1);
     } catch (err) {
@@ -160,13 +179,14 @@ export default function PassExplorerPage() {
   const handleRevertUsed = React.useCallback(async (passId: string) => {
     if (!user) return;
     try {
-      const token = await user.getIdToken();
+      const token = await user.getIdToken(false);
       const res = await fetch(`/api/admin/passes/${passId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ action: 'revertUsed' }),
       });
       if (!res.ok) throw new Error('Failed to revert pass');
+      invalidateCachePrefix('passes');
       toast.success('Pass reverted to active');
       setRefreshKey((k) => k + 1);
     } catch (err) {
@@ -283,7 +303,7 @@ export default function PassExplorerPage() {
     async (action: 'markUsed' | 'revertUsed' | 'softDelete' | 'delete') => {
       if (!user || selectedPassIds.length === 0) return;
       try {
-        const token = await user.getIdToken();
+        const token = await user.getIdToken(false);
         const res = await fetch('/api/admin/bulk-action', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -296,6 +316,7 @@ export default function PassExplorerPage() {
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data?.error ?? 'Action failed');
         const updated = data?.updated ?? 0;
+        invalidateCachePrefix('passes');
         toast.success(`${action === 'delete' ? 'Deleted' : action === 'softDelete' ? 'Archived' : 'Updated'} ${updated} pass(es)`);
         setRowSelection({});
         setRefreshKey((k) => k + 1);

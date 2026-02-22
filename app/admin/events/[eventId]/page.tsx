@@ -38,7 +38,7 @@ export default function EventDashboardPage() {
       try {
         setLoading(true);
         setError(null);
-        const token = await user.getIdToken();
+        const token = await user.getIdToken(false);
         const [eventRes, unifiedRes] = await Promise.all([
           fetchJson<{ event: EventDashboardData['event']; metrics: EventDashboardData['metrics'] }>(
             `/api/admin/events/${eventId}`,
@@ -70,7 +70,7 @@ export default function EventDashboardPage() {
   const handleExport = React.useCallback(async () => {
     if (!user || !eventId) return;
     try {
-      const token = await user.getIdToken();
+      const token = await user.getIdToken(false);
       const res = await fetch(`/api/admin/events/${eventId}/export`, {
         headers: { Authorization: `Bearer ${token}` },
       });

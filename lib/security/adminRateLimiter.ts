@@ -141,6 +141,16 @@ export async function rateLimitAdmin(
   category: RateLimitCategory
 ): Promise<RateLimitResult> {
   const config = CONFIGS[category];
+  // Middleware already ran rate limit for admin routes; skip duplicate Redis call.
+  if (req.headers.get('x-rate-limit-checked') === '1') {
+    return {
+      limited: false,
+      limit: config.requests,
+      remaining: config.requests,
+      resetAfterMs: 60_000,
+      identifier: extractIdentifier(req),
+    };
+  }
   const identifier = extractIdentifier(req);
   const limiter = getLimiter(category);
 

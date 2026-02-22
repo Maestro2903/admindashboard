@@ -9,6 +9,7 @@ import { UnifiedTable, type UnifiedTableFilters } from '@/components/admin/Unifi
 import { BulkActionBar } from '@/components/admin/BulkActionBar';
 import { RowDetailModal, type TeamMemberRow } from '@/components/admin/RowDetailModal';
 import { Button } from '@/components/ui/button';
+import { getCache, setCache, invalidateCachePrefix } from '@/lib/clientCache';
 import type { AdminEvent, CleanUnifiedRecordWithId, UnifiedDashboardResponse } from '@/types/admin';
 
 async function fetchJson<T>(url: string, token: string): Promise<T> {
@@ -82,7 +83,7 @@ function UnifiedViewClientInner() {
     let cancelled = false;
     (async () => {
       try {
-        const token = await user.getIdToken();
+        const token = await user.getIdToken(false);
         const resp = await fetchJson<{ events: AdminEvent[] }>(
           '/api/admin/events?activeOnly=1',
           token
@@ -113,18 +114,48 @@ function UnifiedViewClientInner() {
 
   React.useEffect(() => {
     if (authLoading || !user) return;
+    const cacheKey = `unified-${queryString}`;
+    if (refreshKey === 0) {
+      const cached = getCache<UnifiedDashboardResponse>(cacheKey, 5 * 60 * 1000);
+      if (cached) {
+        setData(cached);
+        setLoading(false);
+        return;
+      }
+    }
     let cancelled = false;
     const timeout = setTimeout(() => {
       (async () => {
         try {
           setLoading(true);
           setError(null);
-          const token = await user.getIdToken();
-          const resp = await fetchJson<UnifiedDashboardResponse>(
-            `/api/admin/unified-dashboard?${queryString}`,
-            token
-          );
-          if (!cancelled) setData(resp);
+          let token = await user.getIdToken(false);
+          let resp: UnifiedDashboardResponse | null = null;
+          try {
+            const res = await fetch(`/api/admin/unified-dashboard?${queryString}`, {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            if (res.status === 401) {
+              token = await user.getIdToken(true);
+              const retry = await fetch(`/api/admin/unified-dashboard?${queryString}`, {
+                headers: { Authorization: `Bearer ${token}` },
+              });
+              if (!retry.ok) throw new Error((await retry.json().catch(() => ({})))?.error ?? 'Request failed');
+              resp = (await retry.json()) as UnifiedDashboardResponse;
+            } else if (!res.ok) {
+              const data = await res.json().catch(() => ({}));
+              throw new Error(typeof data?.error === 'string' ? data.error : `Request failed (${res.status})`);
+            } else {
+              resp = (await res.json()) as UnifiedDashboardResponse;
+            }
+          } catch (e) {
+            if (!cancelled) setError(e instanceof Error ? e.message : 'Unknown error');
+            return;
+          }
+          if (!cancelled && resp) {
+            setData(resp);
+            setCache(cacheKey, resp);
+          }
         } catch (e) {
           if (!cancelled) setError(e instanceof Error ? e.message : 'Unknown error');
         } finally {
@@ -155,7 +186,7 @@ function UnifiedViewClientInner() {
       if (filters.eventId) params.set('eventId', filters.eventId);
       if (filters.from) params.set('from', filters.from);
       if (filters.to) params.set('to', filters.to);
-      const token = await user.getIdToken();
+      const token = await user.getIdToken(false);
       const res = await fetch(`/api/admin/unified-dashboard?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -226,20 +257,24 @@ function UnifiedViewClientInner() {
         selectedPassIds={selectedPassIds}
         selectedRecords={selectedRecords}
         onClearSelection={() => setRowSelection({})}
-        onSuccess={() => setRefreshKey((k) => k + 1)}
-        getToken={async () => (user ? user.getIdToken() : '')}
+        onSuccess={() => {
+          invalidateCachePrefix('unified');
+          setRefreshKey((k) => k + 1);
+        }}
+        getToken={async () => (user ? user.getIdToken(false) : '')}
       />
       <RowDetailModal
         record={detailRecord}
         open={!!detailRecord}
         onClose={() => setDetailRecord(null)}
         onUpdated={() => {
+          invalidateCachePrefix('unified');
           setDetailRecord(null);
           setRefreshKey((k) => k + 1);
         }}
         teamMembers={teamMembers ?? undefined}
         loadingTeam={loadingTeam}
-        getToken={async () => (user ? user.getIdToken() : '')}
+        getToken={async () => (user ? user.getIdToken(false) : '')}
       />
     </div>
   );

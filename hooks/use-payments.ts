@@ -47,7 +47,7 @@ export function usePayments(user: User | null): UsePaymentsResult {
     (async () => {
       try {
         setLoading(true);
-        const token = await user.getIdToken();
+        const token = await user.getIdToken(false);
         const res = await fetch('/api/payments', {
           headers: { Authorization: `Bearer ${token}` },
           signal: controller.signal,

@@ -181,14 +181,13 @@ export function OverviewContent() {
     if (!user) return;
     try {
       setLoading(true);
-      // On the first attempt, use the cached token; force-refresh if it fails
-      let token = await user.getIdToken();
+      // Use cached token; force-refresh only on 401 to reduce Firebase verifyIdToken calls
+      let token = await user.getIdToken(false);
       let res = await fetch('/api/stats', {
         headers: { Authorization: `Bearer ${token}` },
       });
 
       if (res.status === 401) {
-        // Token may have just expired — try once more with a forced refresh
         token = await user.getIdToken(true);
         res = await fetch('/api/stats', {
           headers: { Authorization: `Bearer ${token}` },
@@ -216,12 +215,14 @@ export function OverviewContent() {
     }
   }, [user]);
 
+  // Fetch once when user is ready; deps only auth/user to avoid refetch loops
   useEffect(() => {
     if (authLoading || !user) return;
     fetchData();
-  }, [authLoading, user, fetchData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fetchData is stable; avoid listing it to prevent extra runs
+  }, [authLoading, user]);
 
-  // Auto-refresh every 30s — cancel if auth errors pile up to avoid request floods
+  // Auto-refresh every 60s (reduced from 30s to cut API/token load)
   useEffect(() => {
     if (authLoading || !user) return;
     const interval = setInterval(() => {
@@ -230,9 +231,10 @@ export function OverviewContent() {
         return;
       }
       fetchData();
-    }, 30000);
+    }, 60_000);
     return () => clearInterval(interval);
-  }, [authLoading, user, fetchData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: run once per user
+  }, [authLoading, user]);
 
   const growthPercent =
     stats && stats.registrationsYesterday > 0

@@ -188,8 +188,12 @@ export async function middleware(req: NextRequest): Promise<NextResponse> {
       );
     }
 
-    // Pass through — attach rate limit info headers for observability.
-    const response = NextResponse.next();
+    // Pass through — set request header so route handler can skip duplicate Redis check.
+    const requestHeaders = new Headers(req.headers);
+    requestHeaders.set('x-rate-limit-checked', '1');
+    const response = NextResponse.next({
+      request: { headers: requestHeaders },
+    });
     response.headers.set('X-RateLimit-Limit', String(result.limit));
     response.headers.set('X-RateLimit-Remaining', String(result.remaining));
     return response;

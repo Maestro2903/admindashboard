@@ -68,7 +68,7 @@ function FinancialViewClientInner() {
     let cancelled = false;
     (async () => {
       try {
-        const token = await user.getIdToken();
+        const token = await user.getIdToken(false);
         const resp = await fetchJson<{ events: AdminEvent[] }>('/api/admin/events?activeOnly=1', token);
         if (!cancelled) setEvents(resp.events || []);
       } catch (e) {
@@ -102,7 +102,7 @@ function FinancialViewClientInner() {
         try {
           setLoading(true);
           setError(null);
-          const token = await user.getIdToken();
+          const token = await user.getIdToken(false);
           const resp = await fetchJson<FinancialDashboardResponse>(
             `/api/admin/unified-dashboard?${queryString}`,
             token
@@ -132,7 +132,7 @@ function FinancialViewClientInner() {
       if (filters.eventId) params.set('eventId', filters.eventId);
       if (filters.from) params.set('from', filters.from);
       if (filters.to) params.set('to', filters.to);
-      const token = await user.getIdToken();
+      const token = await user.getIdToken(false);
       const res = await fetch(`/api/admin/unified-dashboard?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -218,7 +218,7 @@ function FinancialViewClientInner() {
         selectedRecords={selectedRecords}
         onClearSelection={() => setRowSelection({})}
         onSuccess={() => setRefreshKey((k) => k + 1)}
-        getToken={async () => (user ? user.getIdToken() : '')}
+        getToken={async () => (user ? user.getIdToken(false) : '')}
         financialMode
       />
 
@@ -230,7 +230,7 @@ function FinancialViewClientInner() {
           setDetailRecord(null);
           setRefreshKey((k) => k + 1);
         }}
-        getToken={async () => (user ? user.getIdToken() : '')}
+        getToken={async () => (user ? user.getIdToken(false) : '')}
       />
     </div>
   );

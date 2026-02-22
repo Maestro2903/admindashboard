@@ -88,7 +88,7 @@ export default function LiveCheckinPage() {
           const parsed = JSON.parse(raw);
           if (parsed && typeof parsed === 'object') body = parsed;
         } catch { /* use as-is */ }
-        const token = await user.getIdToken();
+        const token = await user.getIdToken(false);
         const res = await fetch('/api/admin/scan-verify', {
           method: 'POST',
           headers: {

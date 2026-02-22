@@ -38,7 +38,7 @@ export function useUsers(user: User | null): UseUsersResult {
     (async () => {
       try {
         setLoading(true);
-        const token = await user.getIdToken();
+        const token = await user.getIdToken(false);
         const res = await fetch('/api/users', {
           headers: { Authorization: `Bearer ${token}` },
           signal: controller.signal,

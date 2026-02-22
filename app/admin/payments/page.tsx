@@ -196,7 +196,7 @@ export default function PaymentsPage() {
     if (!editState.payment || !user) return;
     setEditState((s) => ({ ...s, saving: true }));
     try {
-      const token = await user.getIdToken();
+      const token = await user.getIdToken(false);
       const res = await fetch('/api/admin/update-payment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -274,7 +274,7 @@ export default function PaymentsPage() {
   const runBulkAction = useCallback(async (action: 'forceVerifyPayment' | 'delete') => {
     if (!user || selectedIds.length === 0) return;
     try {
-      const token = await user.getIdToken();
+      const token = await user.getIdToken(false);
       const res = await fetch('/api/admin/bulk-action', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },

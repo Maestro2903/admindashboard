@@ -49,7 +49,7 @@ export default function TeamsPage() {
     (async () => {
       try {
         setLoading(true);
-        const token = await user.getIdToken();
+        const token = await user.getIdToken(false);
         const res = await fetch('/api/admin/passes?type=group_events&pageSize=200&includeSummary=1', {
           headers: { Authorization: `Bearer ${token}` },
         });
@@ -94,7 +94,7 @@ export default function TeamsPage() {
   const handleExportCsv = React.useCallback(async () => {
     if (!user) return;
     try {
-      const token = await user.getIdToken();
+      const token = await user.getIdToken(false);
       const res = await fetch('/api/admin/export/teams', {
         headers: { Authorization: `Bearer ${token}` },
       });

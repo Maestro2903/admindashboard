@@ -58,7 +58,7 @@ export default function UsersPage() {
     if (!editUser || !user) return;
     setSaving(true);
     try {
-      const token = await user.getIdToken();
+      const token = await user.getIdToken(false);
       const res = await fetch('/api/admin/update-user', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },

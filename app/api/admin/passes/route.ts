@@ -1,4 +1,5 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import type { DocumentData, QueryDocumentSnapshot } from 'firebase-admin/firestore';
 import { requireOrganizer } from '@/lib/admin/requireOrganizer';
 import { getAdminFirestore } from '@/lib/firebase/adminApp';
 import { rateLimitAdmin, rateLimitResponse } from '@/lib/security/adminRateLimiter';
@@ -10,9 +11,10 @@ import type {
   PassManagementType,
 } from '@/types/admin';
 
-type DocData = FirebaseFirestore.DocumentData;
+type DocData = DocumentData;
 
-const VALID_TYPES: PassManagementType[] = ['day_pass', 'group_events', 'proshow', 'sana_concert'];
+const ALLOWED_TYPES: PassManagementType[] = ['day_pass', 'group_events', 'proshow', 'sana_concert'];
+const MAX_FETCH_LIMIT = 500;
 
 function toIso(value: unknown): string | null {
   if (!value) return null;
@@ -133,58 +135,100 @@ function buildGroupEventsTeam(
 }
 
 export async function GET(req: NextRequest) {
-  const rl = await rateLimitAdmin(req, 'dashboard');
-  if (rl.limited) return rateLimitResponse(rl);
-
   try {
+    const rl = await rateLimitAdmin(req, 'dashboard');
+    if (rl.limited) return rateLimitResponse(rl);
+
     const result = await requireOrganizer(req);
     if (result instanceof Response) return result;
 
     const { searchParams } = new URL(req.url);
     const typeRaw = (searchParams.get('type') ?? '').trim();
-    const type = VALID_TYPES.includes(typeRaw as PassManagementType)
-      ? (typeRaw as PassManagementType)
-      : null;
 
-    if (!type) {
-      return Response.json(
-        { error: 'Missing or invalid type. Use one of: day_pass, group_events, proshow, sana_concert' },
+    if (!typeRaw || !ALLOWED_TYPES.includes(typeRaw as PassManagementType)) {
+      return NextResponse.json(
+        { error: 'Invalid or missing type parameter' },
         { status: 400 }
       );
     }
+    const type = typeRaw as PassManagementType;
 
     const page = clampInt(searchParams.get('page'), 1, 1, 100);
     const pageSize = clampInt(searchParams.get('pageSize'), 50, 1, 100);
-    const fromDate = searchParams.get('from')?.trim() || null;
-    const toDate = searchParams.get('to')?.trim() || null;
+    const fromParam = searchParams.get('from')?.trim() || null;
+    const toParam = searchParams.get('to')?.trim() || null;
     const includeSummary = searchParams.get('includeSummary') === '1';
+
+    let fromDate: Date | null = null;
+    let toDate: Date | null = null;
+    if (fromParam) {
+      const from = new Date(fromParam);
+      if (Number.isNaN(from.getTime())) {
+        return NextResponse.json(
+          { error: 'Invalid from date' },
+          { status: 400 }
+        );
+      }
+      fromDate = from;
+    }
+    if (toParam) {
+      const to = new Date(toParam);
+      if (Number.isNaN(to.getTime())) {
+        return NextResponse.json(
+          { error: 'Invalid to date' },
+          { status: 400 }
+        );
+      }
+      toDate = to;
+    }
 
     const db = getAdminFirestore();
 
-    let passQuery: FirebaseFirestore.Query<DocData> = db
-      .collection('passes')
-      .where('passType', '==', type)
-      .orderBy('createdAt', 'desc');
-
-    if (fromDate) {
-      const from = new Date(fromDate);
-      if (!Number.isNaN(from.getTime())) {
-        passQuery = passQuery.where('createdAt', '>=', from);
-      }
+    // Query by passType only (no orderBy/date in query) to avoid requiring a composite index.
+    // We sort and filter by date in memory below.
+    let passSnap;
+    try {
+      passSnap = await db
+        .collection('passes')
+        .where('passType', '==', type)
+        .limit(MAX_FETCH_LIMIT)
+        .get();
+    } catch (firestoreError: unknown) {
+      const err = firestoreError as { message?: string; code?: number; stack?: string };
+      const message = err?.message ?? String(firestoreError);
+      console.error('ADMIN PASSES ERROR (Firestore):', firestoreError);
+      return NextResponse.json(
+        { error: 'Failed to load passes', details: message },
+        { status: 500 }
+      );
     }
-    if (toDate) {
-      const to = new Date(toDate);
-      if (!Number.isNaN(to.getTime())) {
-        passQuery = passQuery.where('createdAt', '<=', to);
-      }
-    }
 
-    const maxDocs = includeSummary ? 2000 : Math.min(page * pageSize, 500);
-    const passSnap = await passQuery.limit(maxDocs).get();
-
-    const passDocs = passSnap.docs.filter((d) => {
+    let passDocs = passSnap.docs.filter((d) => {
       const data = d.data() as Record<string, unknown>;
-      return data?.isArchived !== true;
+      if (data?.isArchived === true) return false;
+      if (fromDate || toDate) {
+        const created = data?.createdAt as { toDate?: () => Date } | Date | undefined;
+        const createdDate =
+          created instanceof Date ? created : typeof created?.toDate === 'function' ? created.toDate() : null;
+        if (createdDate) {
+          const t = createdDate.getTime();
+          if (fromDate && t < fromDate.getTime()) return false;
+          if (toDate && t > toDate.getTime()) return false;
+        }
+      }
+      return true;
+    });
+
+    // Sort by createdAt descending (newest first)
+    passDocs = passDocs.sort((a, b) => {
+      const getTime = (d: QueryDocumentSnapshot<DocData>) => {
+        const v = (d.data() as Record<string, unknown>)?.createdAt as { toDate?: () => Date } | Date | undefined;
+        if (v instanceof Date) return v.getTime();
+        if (v && typeof (v as { toDate?: () => Date }).toDate === 'function')
+          return (v as { toDate: () => Date }).toDate().getTime();
+        return 0;
+      };
+      return getTime(b) - getTime(a);
     });
 
     const userIds = uniqStrings(
@@ -326,7 +370,7 @@ export async function GET(req: NextRequest) {
     let summary: PassManagementResponse['summary'] | undefined;
     if (includeSummary && recordsAll.length > 0) {
       const totalSold = recordsAll.length;
-      const totalRevenue = recordsAll.reduce((s, r) => s + r.amount, 0);
+      const totalRevenue = recordsAll.reduce((s, r) => s + (r.amount ?? 0), 0);
       const totalUsed = recordsAll.filter((r) => r.passStatus === 'used').length;
       summary = {
         totalSold,
@@ -358,11 +402,26 @@ export async function GET(req: NextRequest) {
       summary,
     };
 
-    return Response.json(response);
+    return NextResponse.json(response);
   } catch (error) {
-    console.error('Admin passes API error:', error);
-    return Response.json(
-      { error: error instanceof Error ? error.message : 'Server error' },
+    const stack = error instanceof Error ? error.stack : undefined;
+    console.error('ADMIN PASSES ERROR:', error);
+    if (stack) console.error(stack);
+    const message = error instanceof Error ? error.message : 'Server error';
+    if (
+      typeof message === 'string' &&
+      (message.includes('index') || message.includes('requires an index'))
+    ) {
+      return NextResponse.json(
+        {
+          error: 'Firestore index required. Deploy indexes: firebase deploy --only firestore:indexes',
+          details: message,
+        },
+        { status: 500 }
+      );
+    }
+    return NextResponse.json(
+      { error: 'Internal server error', details: String(error) },
       { status: 500 }
     );
   }

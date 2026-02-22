@@ -1,8 +1,10 @@
 'use client';
 
 import * as React from 'react';
+import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/features/auth/AuthContext';
+import { Skeleton } from '@/components/ui/skeleton';
 import { FinancialTable } from '@/components/admin/FinancialTable';
 import { BulkActionBar } from '@/components/admin/BulkActionBar';
 import { RowDetailModal } from '@/components/admin/RowDetailModal';
@@ -22,7 +24,7 @@ async function fetchJson<T>(url: string, token: string): Promise<T> {
   return (await res.json()) as T;
 }
 
-export function FinancialViewClient() {
+function FinancialViewClientInner() {
   const { user, loading: authLoading } = useAuth();
   const searchParams = useSearchParams();
 
@@ -231,5 +233,13 @@ export function FinancialViewClient() {
         getToken={async () => (user ? user.getIdToken() : '')}
       />
     </div>
+  );
+}
+
+export function FinancialViewClient() {
+  return (
+    <Suspense fallback={<Skeleton className="h-24 w-full" />}>
+      <FinancialViewClientInner />
+    </Suspense>
   );
 }

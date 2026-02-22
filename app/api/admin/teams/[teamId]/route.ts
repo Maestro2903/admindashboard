@@ -53,7 +53,7 @@ export async function GET(
       teamName: getString(d, 'teamName'),
       totalMembers,
       passId: getString(d, 'passId'),
-      paymentStatus: getString(d, 'paymentStatus'),
+      paymentStatus: getString(d, 'paymentStatus') ?? getString(d, 'status') ?? 'pending',
       members: membersList,
     });
   } catch (error) {

@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server';
+import type { DocumentData, Query } from 'firebase-admin/firestore';
 import { requireAdminRole, forbiddenRole } from '@/lib/admin/requireAdminRole';
 import { getAdminFirestore } from '@/lib/firebase/adminApp';
 import { rateLimitAdmin, rateLimitResponse } from '@/lib/security/adminRateLimiter';
@@ -12,7 +13,7 @@ import type {
   UnifiedDashboardResponse,
 } from '@/types/admin';
 
-type DocData = FirebaseFirestore.DocumentData;
+type DocData = DocumentData;
 
 function toIso(value: unknown): string | null {
   if (!value) return null;
@@ -83,7 +84,7 @@ function getTodayISTBounds(): { start: Date; end: Date } {
   return { start, end };
 }
 
-async function safeCount(query: FirebaseFirestore.Query<DocData>): Promise<number | undefined> {
+async function safeCount(query: Query<DocData>): Promise<number | undefined> {
   try {
     // Firestore count aggregation is supported on modern SDKs.
     const agg = await query.count().get();
@@ -133,7 +134,7 @@ export async function GET(req: NextRequest) {
     const db = getAdminFirestore();
 
     // Primary pagination is pass-based (one record per pass). Success-only filter applied after join.
-    let basePassQuery: FirebaseFirestore.Query<DocData> = db.collection('passes');
+    let basePassQuery: Query<DocData> = db.collection('passes');
     if (passType) basePassQuery = basePassQuery.where('passType', '==', passType);
     if (eventId) basePassQuery = basePassQuery.where('selectedEvents', 'array-contains', eventId);
     if (fromDate) {
@@ -147,7 +148,7 @@ export async function GET(req: NextRequest) {
     basePassQuery = basePassQuery.orderBy('createdAt', 'desc');
 
     const scanLimit = Math.min(pageSize * 5, 500);
-    let passQuery: FirebaseFirestore.Query<DocData> = basePassQuery;
+    let passQuery: Query<DocData> = basePassQuery;
     if (cursor) {
       const cursorDoc = await db.collection('passes').doc(cursor).get();
       if (cursorDoc.exists) {

@@ -69,7 +69,7 @@ export async function rebuildAdminDashboardForUser(userId: string): Promise<void
         teamId: doc.id,
         teamName: String(d.teamName ?? ''),
         totalMembers: Number(d.totalMembers ?? d.members?.length ?? 0),
-        paymentStatus: String(d.paymentStatus ?? 'pending'),
+        paymentStatus: String(d.paymentStatus ?? d.status ?? 'pending'),
       };
       if (d.passId) t.passId = d.passId;
       return t;

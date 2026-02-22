@@ -65,7 +65,7 @@ export async function GET(req: NextRequest) {
         String(total),
         String(checkedIn),
         getString(d, 'passId') ?? '',
-        getString(d, 'paymentStatus') ?? '',
+        getString(d, 'paymentStatus') ?? getString(d, 'status') ?? '',
       ]);
     }
 

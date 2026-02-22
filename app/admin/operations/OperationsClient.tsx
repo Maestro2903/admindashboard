@@ -1,12 +1,14 @@
 'use client';
 
 import * as React from 'react';
+import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/features/auth/AuthContext';
 import { BulkActionBar } from '@/components/admin/BulkActionBar';
 import { RowDetailModal } from '@/components/admin/RowDetailModal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Select,
   SelectContent,
@@ -135,7 +137,7 @@ const TableRow = React.memo(function TableRow({
   );
 });
 
-export function OperationsClient() {
+function OperationsClientInner() {
   const { user, loading: authLoading } = useAuth();
   const searchParams = useSearchParams();
 
@@ -330,11 +332,11 @@ export function OperationsClient() {
         {showFilters && (
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 rounded-xl border border-zinc-800 bg-zinc-900 p-4 fade-in">
             <div>
-              <label className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 mb-1.5 block">
+              <label htmlFor="filter-pass-type" className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 mb-1.5 block">
                 Pass Type
               </label>
               <Select value={passType} onValueChange={(v) => { setPassType(v); setCursorStack([]); }}>
-                <SelectTrigger className="bg-zinc-800 border-zinc-700 text-zinc-300">
+                <SelectTrigger id="filter-pass-type" className="bg-zinc-800 border-zinc-700 text-zinc-300">
                   <SelectValue placeholder="All" />
                 </SelectTrigger>
                 <SelectContent className="bg-zinc-800 border-zinc-700 text-zinc-300">
@@ -346,11 +348,11 @@ export function OperationsClient() {
               </Select>
             </div>
             <div>
-              <label className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 mb-1.5 block">
+              <label htmlFor="filter-event" className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 mb-1.5 block">
                 Event
               </label>
               <Select value={eventId} onValueChange={(v) => { setEventId(v); setCursorStack([]); }}>
-                <SelectTrigger className="bg-zinc-800 border-zinc-700 text-zinc-300">
+                <SelectTrigger id="filter-event" className="bg-zinc-800 border-zinc-700 text-zinc-300">
                   <SelectValue placeholder="All" />
                 </SelectTrigger>
                 <SelectContent className="bg-zinc-800 border-zinc-700 text-zinc-300">
@@ -362,10 +364,11 @@ export function OperationsClient() {
               </Select>
             </div>
             <div>
-              <label className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 mb-1.5 block">
+              <label htmlFor="filter-date-from" className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 mb-1.5 block">
                 From Date
               </label>
               <Input
+                id="filter-date-from"
                 type="date"
                 value={dateFrom}
                 onChange={(e) => { setDateFrom(e.target.value); setCursorStack([]); }}
@@ -373,10 +376,11 @@ export function OperationsClient() {
               />
             </div>
             <div>
-              <label className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 mb-1.5 block">
+              <label htmlFor="filter-date-to" className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 mb-1.5 block">
                 To Date
               </label>
               <Input
+                id="filter-date-to"
                 type="date"
                 value={dateTo}
                 onChange={(e) => { setDateTo(e.target.value); setCursorStack([]); }}
@@ -517,5 +521,13 @@ export function OperationsClient() {
         getToken={async () => (user ? user.getIdToken() : '')}
       />
     </div>
+  );
+}
+
+export function OperationsClient() {
+  return (
+    <Suspense fallback={<Skeleton className="h-24 w-full" />}>
+      <OperationsClientInner />
+    </Suspense>
   );
 }

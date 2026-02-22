@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import Image from 'next/image';
 import type { CleanUnifiedRecordWithId, FinancialRecord } from '@/types/admin';
 import { IconX, IconCircleCheckFilled, IconQrcode, IconTrash, IconRotate, IconShieldCheck, IconAlertTriangle } from '@tabler/icons-react';
 import { formatPhone } from '@/lib/utils';
@@ -68,6 +69,186 @@ const PAYMENT_STATUS_STYLES: Record<string, { dot: string; badge: string }> = {
   failed: { dot: 'bg-red-500', badge: 'bg-red-500/10 text-red-400' },
 };
 
+// --- Subcomponents for RowDetailModal ---
+function ModalHeader({
+  record,
+  onClose,
+}: {
+  record: RowDetailRecord;
+  onClose: () => void;
+}) {
+  const statusStyle = PAYMENT_STATUS_STYLES[record.paymentStatus] ?? PAYMENT_STATUS_STYLES.success;
+  return (
+    <div className="flex items-center justify-between border-b border-zinc-800 px-6 py-4">
+      <div className="flex items-center gap-3">
+        <div className={`h-2.5 w-2.5 rounded-full ${statusStyle.dot}`} />
+        <div>
+          <h2 className="text-sm font-semibold text-white">Pass Overview</h2>
+          <p className="text-[11px] font-mono text-zinc-600 mt-0.5">{record.passId}</p>
+        </div>
+      </div>
+      <button
+        onClick={onClose}
+        className="rounded-lg p-1.5 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-300"
+      >
+        <IconX size={18} />
+      </button>
+    </div>
+  );
+}
+
+function UserSection({ record }: { record: RowDetailRecord }) {
+  return (
+    <div>
+      <h3 className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500 mb-3">User</h3>
+      <div className="grid grid-cols-2 gap-y-3 gap-x-4 text-sm">
+        <div>
+          <div className="text-[11px] text-zinc-500 mb-0.5">Name</div>
+          <div className="text-white font-medium">{safeStr(record.name)}</div>
+        </div>
+        <div>
+          <div className="text-[11px] text-zinc-500 mb-0.5">Phone</div>
+          {record.phone ? (
+            <a href={`tel:${record.phone}`} className="text-white tabular-nums hover:text-emerald-400 transition-colors">
+              {formatPhone(record.phone)}
+            </a>
+          ) : (
+            <div className="text-zinc-500">—</div>
+          )}
+        </div>
+        <div className="col-span-2">
+          <div className="text-[11px] text-zinc-500 mb-0.5">Email</div>
+          <div className="text-zinc-300 text-xs break-all">{safeStr(record.email)}</div>
+        </div>
+        <div className="col-span-2">
+          <div className="text-[11px] text-zinc-500 mb-0.5">College</div>
+          <div className="text-zinc-300">{safeStr(record.college)}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PassSection({ record }: { record: RowDetailRecord }) {
+  const statusStyle = PAYMENT_STATUS_STYLES[record.paymentStatus] ?? PAYMENT_STATUS_STYLES.success;
+  const ptStyle = PASS_TYPE_STYLES[record.passType] ?? 'bg-zinc-800 text-zinc-300 border-zinc-700';
+  return (
+    <div>
+      <h3 className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500 mb-3">Pass</h3>
+      <div className="grid grid-cols-2 gap-y-3 gap-x-4 text-sm">
+        <div>
+          <div className="text-[11px] text-zinc-500 mb-1">Type</div>
+          <span className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium ${ptStyle}`}>
+            {PASS_TYPE_LABELS[record.passType] ?? record.passType}
+          </span>
+        </div>
+        <div>
+          <div className="text-[11px] text-zinc-500 mb-1">Payment</div>
+          <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${statusStyle.badge}`}>
+            {record.paymentStatus}
+          </span>
+        </div>
+        <div className="col-span-2">
+          <div className="text-[11px] text-zinc-500 mb-0.5">Event</div>
+          <div className="text-zinc-300">{safeStr(record.eventName)}</div>
+        </div>
+        <div className="col-span-2">
+          <div className="text-[11px] text-zinc-500 mb-0.5">Registered On</div>
+          <div className="text-zinc-300 tabular-nums">{formatDate(record.createdAt)}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FinancialSection({ record }: { record: FinancialRecord }) {
+  return (
+    <div>
+      <h3 className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500 mb-3">Financial</h3>
+      <div className="grid grid-cols-2 gap-y-3 gap-x-4 text-sm">
+        <div>
+          <div className="text-[11px] text-zinc-500 mb-0.5">Amount</div>
+          <div className="text-white font-semibold tabular-nums">
+            ₹{Number(record.amount).toLocaleString('en-IN')}
+          </div>
+        </div>
+        <div>
+          <div className="text-[11px] text-zinc-500 mb-0.5">Order ID</div>
+          <div className="font-mono text-xs text-zinc-400 break-all">{safeStr(record.orderId)}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ModalActions({
+  record,
+  actionLoading,
+  qrLoading,
+  onMarkUsed,
+  onRevertUsed,
+  onForceVerify,
+  onViewQr,
+  onDeleteClick,
+}: {
+  record: RowDetailRecord;
+  actionLoading: string | null;
+  qrLoading: boolean;
+  onMarkUsed: () => void;
+  onRevertUsed: () => void;
+  onForceVerify: () => void;
+  onViewQr: () => void;
+  onDeleteClick: () => void;
+}) {
+  return (
+    <div className="border-t border-zinc-800 px-6 py-4 space-y-3">
+      <div className="flex gap-2">
+        <button
+          onClick={onMarkUsed}
+          disabled={!!actionLoading}
+          className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-emerald-500/15 px-3 py-2.5 text-sm font-medium text-emerald-400 transition-all duration-150 hover:bg-emerald-500/25 disabled:opacity-40"
+        >
+          <IconCircleCheckFilled size={16} />
+          {actionLoading === 'markUsed' ? 'Marking...' : 'Mark as Used'}
+        </button>
+        <button
+          onClick={onRevertUsed}
+          disabled={!!actionLoading}
+          className="flex-1 flex items-center justify-center gap-2 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2.5 text-sm font-medium text-zinc-300 transition-all duration-150 hover:bg-zinc-700 disabled:opacity-40"
+        >
+          <IconRotate size={16} />
+          {actionLoading === 'revertUsed' ? 'Reverting...' : 'Revert Used'}
+        </button>
+      </div>
+      <div className="flex gap-2">
+        <button
+          onClick={onForceVerify}
+          disabled={!!actionLoading}
+          className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-400 transition-all duration-150 hover:bg-amber-500/20 disabled:opacity-40"
+        >
+          <IconShieldCheck size={15} />
+          {actionLoading === 'fixPayment' ? 'Verifying...' : 'Force Verify'}
+        </button>
+        <button
+          onClick={onViewQr}
+          disabled={qrLoading}
+          className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-blue-500/10 px-3 py-2 text-xs font-medium text-blue-400 transition-all duration-150 hover:bg-blue-500/20 disabled:opacity-40"
+        >
+          <IconQrcode size={15} />
+          {qrLoading ? 'Loading...' : 'View QR'}
+        </button>
+        <button
+          onClick={onDeleteClick}
+          disabled={!!actionLoading}
+          className="flex items-center justify-center gap-2 rounded-lg bg-red-500/10 px-3 py-2 text-xs font-medium text-red-400 transition-all duration-150 hover:bg-red-500/20 disabled:opacity-40"
+        >
+          <IconTrash size={15} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // --- Delete confirmation modal ---
 function DeleteConfirmModal({
   open,
@@ -83,7 +264,14 @@ function DeleteConfirmModal({
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onCancel} />
+      <div
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        role="button"
+        tabIndex={0}
+        aria-label="Close dialog"
+        onClick={onCancel}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onCancel(); } }}
+      />
       <div className="relative z-10 w-full max-w-sm rounded-xl border border-zinc-800 bg-zinc-900 p-6 shadow-2xl fade-in">
         <div className="flex items-center gap-3 mb-4">
           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-500/10">
@@ -245,199 +433,58 @@ export function RowDetailModal({
 
   if (!record) return null;
 
-  const statusStyle = PAYMENT_STATUS_STYLES[record.paymentStatus] ?? PAYMENT_STATUS_STYLES.success;
-  const ptStyle = PASS_TYPE_STYLES[record.passType] ?? 'bg-zinc-800 text-zinc-300 border-zinc-700';
-
   return (
     <>
-      {/* Backdrop */}
       <div
         className={`fixed inset-0 z-40 transition-opacity duration-200 ${
           open ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
         style={{ backgroundColor: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)' }}
+        role="button"
+        tabIndex={0}
+        aria-label="Close panel"
         onClick={onClose}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClose(); } }}
       />
-
-      {/* Drawer */}
       <div
         ref={drawerRef}
         className={`fixed right-0 top-0 z-50 flex h-full w-[420px] flex-col border-l border-zinc-800 bg-zinc-950 shadow-2xl transition-transform duration-200 ease-out ${
           open ? 'translate-x-0' : 'translate-x-full'
         }`}
       >
-        {/* ---- Header ---- */}
-        <div className="flex items-center justify-between border-b border-zinc-800 px-6 py-4">
-          <div className="flex items-center gap-3">
-            {/* Status dot */}
-            <div className={`h-2.5 w-2.5 rounded-full ${statusStyle.dot}`} />
-            <div>
-              <h2 className="text-sm font-semibold text-white">Pass Overview</h2>
-              <p className="text-[11px] font-mono text-zinc-600 mt-0.5">{record.passId}</p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="rounded-lg p-1.5 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-300"
-          >
-            <IconX size={18} />
-          </button>
-        </div>
-
-        {/* ---- Content ---- */}
+        <ModalHeader record={record} onClose={onClose} />
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-0">
-
-          {/* SECTION: User */}
-          <div>
-            <h3 className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500 mb-3">User</h3>
-            <div className="grid grid-cols-2 gap-y-3 gap-x-4 text-sm">
-              <div>
-                <div className="text-[11px] text-zinc-500 mb-0.5">Name</div>
-                <div className="text-white font-medium">{safeStr(record.name)}</div>
-              </div>
-              <div>
-                <div className="text-[11px] text-zinc-500 mb-0.5">Phone</div>
-                {record.phone ? (
-                  <a
-                    href={`tel:${record.phone}`}
-                    className="text-white tabular-nums hover:text-emerald-400 transition-colors"
-                  >
-                    {formatPhone(record.phone)}
-                  </a>
-                ) : (
-                  <div className="text-zinc-500">—</div>
-                )}
-              </div>
-              <div className="col-span-2">
-                <div className="text-[11px] text-zinc-500 mb-0.5">Email</div>
-                <div className="text-zinc-300 text-xs break-all">{safeStr(record.email)}</div>
-              </div>
-              <div className="col-span-2">
-                <div className="text-[11px] text-zinc-500 mb-0.5">College</div>
-                <div className="text-zinc-300">{safeStr(record.college)}</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Divider */}
+          <UserSection record={record} />
           <div className="mt-6 pt-6 border-t border-zinc-800" />
-
-          {/* SECTION: Pass */}
-          <div>
-            <h3 className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500 mb-3">Pass</h3>
-            <div className="grid grid-cols-2 gap-y-3 gap-x-4 text-sm">
-              <div>
-                <div className="text-[11px] text-zinc-500 mb-1">Type</div>
-                <span className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium ${ptStyle}`}>
-                  {PASS_TYPE_LABELS[record.passType] ?? record.passType}
-                </span>
-              </div>
-              <div>
-                <div className="text-[11px] text-zinc-500 mb-1">Payment</div>
-                <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${statusStyle.badge}`}>
-                  {record.paymentStatus}
-                </span>
-              </div>
-              <div className="col-span-2">
-                <div className="text-[11px] text-zinc-500 mb-0.5">Event</div>
-                <div className="text-zinc-300">{safeStr(record.eventName)}</div>
-              </div>
-              <div className="col-span-2">
-                <div className="text-[11px] text-zinc-500 mb-0.5">Registered On</div>
-                <div className="text-zinc-300 tabular-nums">{formatDate(record.createdAt)}</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Financial section (only for financial records) */}
+          <PassSection record={record} />
           {'amount' in record && (
             <>
               <div className="mt-6 pt-6 border-t border-zinc-800" />
-              <div>
-                <h3 className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500 mb-3">Financial</h3>
-                <div className="grid grid-cols-2 gap-y-3 gap-x-4 text-sm">
-                  <div>
-                    <div className="text-[11px] text-zinc-500 mb-0.5">Amount</div>
-                    <div className="text-white font-semibold tabular-nums">
-                      ₹{Number((record as FinancialRecord).amount).toLocaleString('en-IN')}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-[11px] text-zinc-500 mb-0.5">Order ID</div>
-                    <div className="font-mono text-xs text-zinc-400 break-all">
-                      {safeStr((record as FinancialRecord).orderId)}
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <FinancialSection record={record as FinancialRecord} />
             </>
           )}
-
-          {/* QR Code */}
           {qrImageUrl && (
             <>
               <div className="mt-6 pt-6 border-t border-zinc-800" />
               <div className="flex justify-center">
                 <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
-                  <img src={qrImageUrl} alt="QR Code" className="w-44 h-44 rounded-lg" />
+                  <Image src={qrImageUrl} alt="QR Code" width={176} height={176} className="rounded-lg" />
                 </div>
               </div>
             </>
           )}
         </div>
-
-        {/* ---- Actions Footer ---- */}
-        <div className="border-t border-zinc-800 px-6 py-4 space-y-3">
-          {/* Primary actions */}
-          <div className="flex gap-2">
-            <button
-              onClick={handleMarkUsed}
-              disabled={!!actionLoading}
-              className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-emerald-500/15 px-3 py-2.5 text-sm font-medium text-emerald-400 transition-all duration-150 hover:bg-emerald-500/25 disabled:opacity-40"
-            >
-              <IconCircleCheckFilled size={16} />
-              {actionLoading === 'markUsed' ? 'Marking...' : 'Mark as Used'}
-            </button>
-            <button
-              onClick={handleRevertUsed}
-              disabled={!!actionLoading}
-              className="flex-1 flex items-center justify-center gap-2 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2.5 text-sm font-medium text-zinc-300 transition-all duration-150 hover:bg-zinc-700 disabled:opacity-40"
-            >
-              <IconRotate size={16} />
-              {actionLoading === 'revertUsed' ? 'Reverting...' : 'Revert Used'}
-            </button>
-          </div>
-
-          {/* Secondary actions */}
-          <div className="flex gap-2">
-            <button
-              onClick={handleForceVerify}
-              disabled={!!actionLoading}
-              className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-400 transition-all duration-150 hover:bg-amber-500/20 disabled:opacity-40"
-            >
-              <IconShieldCheck size={15} />
-              {actionLoading === 'fixPayment' ? 'Verifying...' : 'Force Verify'}
-            </button>
-            <button
-              onClick={handleViewQr}
-              disabled={qrLoading}
-              className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-blue-500/10 px-3 py-2 text-xs font-medium text-blue-400 transition-all duration-150 hover:bg-blue-500/20 disabled:opacity-40"
-            >
-              <IconQrcode size={15} />
-              {qrLoading ? 'Loading...' : 'View QR'}
-            </button>
-            <button
-              onClick={() => setShowDeleteConfirm(true)}
-              disabled={!!actionLoading}
-              className="flex items-center justify-center gap-2 rounded-lg bg-red-500/10 px-3 py-2 text-xs font-medium text-red-400 transition-all duration-150 hover:bg-red-500/20 disabled:opacity-40"
-            >
-              <IconTrash size={15} />
-            </button>
-          </div>
-        </div>
+        <ModalActions
+          record={record}
+          actionLoading={actionLoading}
+          qrLoading={qrLoading}
+          onMarkUsed={handleMarkUsed}
+          onRevertUsed={handleRevertUsed}
+          onForceVerify={handleForceVerify}
+          onViewQr={handleViewQr}
+          onDeleteClick={() => setShowDeleteConfirm(true)}
+        />
       </div>
-
-      {/* Delete confirmation */}
       <DeleteConfirmModal
         open={showDeleteConfirm}
         onConfirm={handleDeletePass}

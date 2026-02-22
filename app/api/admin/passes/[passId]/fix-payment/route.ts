@@ -42,9 +42,11 @@ export async function POST(
     }
 
     const authHeader = req.headers.get('Authorization');
-    const baseUrl = process.env.VERCEL_URL
-      ? `https://${process.env.VERCEL_URL}`
-      : req.nextUrl?.origin ?? 'http://localhost:3000';
+    const baseUrl =
+      (process.env.APP_URL?.replace(/\/$/, '') || '').trim() ||
+      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
+      req.nextUrl?.origin ||
+      'http://localhost:3000';
 
     const fixRes = await fetch(`${baseUrl}/api/fix-stuck-payment`, {
       method: 'POST',

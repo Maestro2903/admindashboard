@@ -1,8 +1,10 @@
 'use client';
 
 import * as React from 'react';
+import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/features/auth/AuthContext';
+import { Skeleton } from '@/components/ui/skeleton';
 import { UnifiedTable, type UnifiedTableFilters } from '@/components/admin/UnifiedTable';
 import { BulkActionBar } from '@/components/admin/BulkActionBar';
 import { RowDetailModal, type TeamMemberRow } from '@/components/admin/RowDetailModal';
@@ -21,7 +23,7 @@ async function fetchJson<T>(url: string, token: string): Promise<T> {
   return (await res.json()) as T;
 }
 
-export function UnifiedViewClient() {
+function UnifiedViewClientInner() {
   const { user, loading: authLoading } = useAuth();
 
   const [events, setEvents] = React.useState<AdminEvent[]>([]);
@@ -240,5 +242,13 @@ export function UnifiedViewClient() {
         getToken={async () => (user ? user.getIdToken() : '')}
       />
     </div>
+  );
+}
+
+export function UnifiedViewClient() {
+  return (
+    <Suspense fallback={<Skeleton className="h-24 w-full" />}>
+      <UnifiedViewClientInner />
+    </Suspense>
   );
 }

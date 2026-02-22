@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
 import type { User } from 'firebase/auth';
+import { getCache, setCache, invalidateCache } from '@/lib/clientCache';
+
+const CACHE_KEY = 'payments';
 
 interface Payment {
   id: string;
@@ -29,6 +32,17 @@ export function usePayments(user: User | null): UsePaymentsResult {
 
   useEffect(() => {
     if (!user) { setLoading(false); return; }
+
+    // version === 0 → initial mount: serve from cache if available
+    if (version === 0) {
+      const cached = getCache<Payment[]>(CACHE_KEY);
+      if (cached) {
+        setPayments(cached);
+        setLoading(false);
+        return;
+      }
+    }
+
     const controller = new AbortController();
     (async () => {
       try {
@@ -40,7 +54,9 @@ export function usePayments(user: User | null): UsePaymentsResult {
         });
         if (!res.ok) throw new Error(`Failed: ${res.status}`);
         const data = await res.json();
-        setPayments(data.payments || []);
+        const list: Payment[] = data.payments || [];
+        setCache(CACHE_KEY, list);
+        setPayments(list);
         setError(null);
       } catch (err) {
         if (!controller.signal.aborted) {
@@ -53,7 +69,11 @@ export function usePayments(user: User | null): UsePaymentsResult {
     return () => controller.abort();
   }, [user, version]);
 
-  const refetch = () => setVersion((v) => v + 1);
+  // Invalidate cache so the next fetch always goes to the API
+  const refetch = () => {
+    invalidateCache(CACHE_KEY);
+    setVersion((v) => v + 1);
+  };
 
   return { payments, loading, error, refetch };
 }

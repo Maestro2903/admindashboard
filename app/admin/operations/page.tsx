@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
+import { Skeleton } from '@/components/ui/skeleton';
 import { OperationsClient } from './OperationsClient';
 
 export const metadata: Metadata = {
@@ -9,7 +10,7 @@ export const metadata: Metadata = {
 
 export default function OperationsPage() {
   return (
-    <Suspense fallback={<div className="h-8 w-full animate-pulse rounded bg-zinc-800" />}>
+    <Suspense fallback={<Skeleton className="h-24 w-full" />}>
       <OperationsClient />
     </Suspense>
   );

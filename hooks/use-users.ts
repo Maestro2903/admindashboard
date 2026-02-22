@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
 import type { User } from 'firebase/auth';
+import { getCache, setCache, invalidateCache } from '@/lib/clientCache';
+
+const CACHE_KEY = 'users';
 
 interface UserRecord {
   id: string;

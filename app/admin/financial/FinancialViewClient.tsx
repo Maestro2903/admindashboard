@@ -37,6 +37,8 @@ function FinancialViewClientInner() {
     q: searchParams.get('q') ?? '',
     passType: searchParams.get('passType') ?? undefined,
     eventId: searchParams.get('eventId') ?? undefined,
+    eventCategory: searchParams.get('eventCategory') ?? undefined,
+    eventType: searchParams.get('eventType') ?? undefined,
     from: searchParams.get('from') ?? undefined,
     to: searchParams.get('to') ?? undefined,
   }));
@@ -88,6 +90,8 @@ function FinancialViewClientInner() {
     if (filters.q?.trim()) params.set('q', filters.q.trim());
     if (filters.passType) params.set('passType', filters.passType);
     if (filters.eventId) params.set('eventId', filters.eventId);
+    if (filters.eventCategory) params.set('eventCategory', filters.eventCategory);
+    if (filters.eventType) params.set('eventType', filters.eventType);
     if (filters.from) params.set('from', filters.from);
     if (filters.to) params.set('to', filters.to);
     return params.toString();
@@ -130,6 +134,8 @@ function FinancialViewClientInner() {
       if (filters.q?.trim()) params.set('q', filters.q.trim());
       if (filters.passType) params.set('passType', filters.passType);
       if (filters.eventId) params.set('eventId', filters.eventId);
+      if (filters.eventCategory) params.set('eventCategory', filters.eventCategory);
+      if (filters.eventType) params.set('eventType', filters.eventType);
       if (filters.from) params.set('from', filters.from);
       if (filters.to) params.set('to', filters.to);
       const token = await user.getIdToken(false);

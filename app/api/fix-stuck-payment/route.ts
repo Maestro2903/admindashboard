@@ -8,6 +8,40 @@ import { sendEmail, emailTemplates } from '@/features/email/emailService';
 import { generatePassPDFBuffer } from '@/features/passes/pdfGenerator.server';
 import { checkRateLimit } from '@/lib/security/rateLimiter';
 
+/** Resolve eventIds from payment or from events that allow this passType. Returns eventIds and first event's category/type. */
+async function resolveEventIdsAndMeta(
+  db: ReturnType<typeof getAdminFirestore>,
+  paymentData: Record<string, unknown>
+): Promise<{ eventIds: string[]; eventCategory?: string; eventType?: string }> {
+  const paymentEventIds = Array.isArray(paymentData.eventIds)
+    ? (paymentData.eventIds as string[]).filter((x) => typeof x === 'string')
+    : [];
+  if (paymentEventIds.length > 0) {
+    const first = await db.collection('events').doc(paymentEventIds[0]).get();
+    const d = first.exists ? (first.data() as Record<string, unknown>) : null;
+    return {
+      eventIds: paymentEventIds,
+      eventCategory: typeof d?.category === 'string' ? d.category : undefined,
+      eventType: typeof d?.type === 'string' ? d.type : undefined,
+    };
+  }
+  const passType = typeof paymentData.passType === 'string' ? paymentData.passType : '';
+  if (!passType) return { eventIds: [] };
+  const eventsSnap = await db
+    .collection('events')
+    .where('allowedPassTypes', 'array-contains', passType)
+    .limit(50)
+    .get();
+  const eventIds = eventsSnap.docs.map((d) => d.id);
+  const firstDoc = eventsSnap.docs[0];
+  const d = firstDoc?.data() as Record<string, unknown> | undefined;
+  return {
+    eventIds,
+    eventCategory: typeof d?.category === 'string' ? d.category : undefined,
+    eventType: typeof d?.type === 'string' ? d.type : undefined,
+  };
+}
+
 const CASHFREE_BASE =
   process.env.NEXT_PUBLIC_CASHFREE_ENV === 'production'
     ? 'https://api.cashfree.com/pg'
@@ -99,6 +133,18 @@ export async function POST(req: NextRequest) {
 
     if (!existingPassSnapshot.empty) {
       const existingPass = existingPassSnapshot.docs[0];
+      const existingPassData = existingPass.data() as Record<string, unknown>;
+      const passEventIds = Array.isArray(existingPassData.eventIds)
+        ? existingPassData.eventIds
+        : Array.isArray(existingPassData.selectedEvents)
+          ? existingPassData.selectedEvents
+          : [];
+      if (passEventIds.length > 0 && (!Array.isArray(paymentData.eventIds) || paymentData.eventIds.length === 0)) {
+        await paymentDoc.ref.update({
+          eventIds: passEventIds,
+          updatedAt: new Date(),
+        });
+      }
       void rebuildAdminDashboardForUser(paymentData.userId).catch((err) =>
         console.error('[FixPayment] rebuildAdminDashboard error:', err)
       );
@@ -109,6 +155,8 @@ export async function POST(req: NextRequest) {
         qrCode: existingPass.data().qrCode,
       });
     }
+
+    const { eventIds: resolvedEventIds, eventCategory, eventType } = await resolveEventIdsAndMeta(db, paymentData);
 
     const passRef = db.collection('passes').doc();
     const qrData = createQRPayload(passRef.id, paymentData.userId, paymentData.passType);
@@ -124,6 +172,12 @@ export async function POST(req: NextRequest) {
       createdAt: new Date(),
       createdManually: true,
     };
+    if (resolvedEventIds.length > 0) {
+      passData.eventIds = resolvedEventIds;
+      passData.selectedEvents = resolvedEventIds;
+      if (eventCategory) passData.eventCategory = eventCategory;
+      if (eventType) passData.eventType = eventType;
+    }
 
     if (paymentData.passType === 'group_events' && paymentData.teamId) {
       try {
@@ -131,7 +185,7 @@ export async function POST(req: NextRequest) {
         if (teamDoc.exists) {
           const teamData = teamDoc.data();
           passData.teamId = paymentData.teamId;
-          passData.teamSnapshot = {
+          const teamSnapshot: Record<string, unknown> = {
             teamName: teamData?.teamName || '',
             totalMembers: teamData?.members?.length || 0,
             members: (teamData?.members || []).map((member: { memberId: string; name: string; phone: string; isLeader: boolean }) => ({
@@ -142,12 +196,16 @@ export async function POST(req: NextRequest) {
               checkedIn: false,
             })),
           };
+          if (resolvedEventIds.length > 0) teamSnapshot.eventIds = resolvedEventIds;
+          passData.teamSnapshot = teamSnapshot;
 
-          await db.collection('teams').doc(paymentData.teamId).update({
+          const teamUpdate: Record<string, unknown> = {
             passId: passRef.id,
             paymentStatus: 'success',
             updatedAt: new Date(),
-          });
+          };
+          if (resolvedEventIds.length > 0) teamUpdate.eventIds = resolvedEventIds;
+          await db.collection('teams').doc(paymentData.teamId).update(teamUpdate);
         }
       } catch (teamError) {
         console.error('[FixPayment] Error fetching team:', teamError);
@@ -155,6 +213,15 @@ export async function POST(req: NextRequest) {
     }
 
     await passRef.set(passData);
+
+    if (resolvedEventIds.length > 0 && (!Array.isArray(paymentData.eventIds) || paymentData.eventIds.length === 0)) {
+      await paymentDoc.ref.update({
+        eventIds: resolvedEventIds,
+        ...(eventCategory && { eventCategory }),
+        ...(eventType && { eventType }),
+        updatedAt: new Date(),
+      });
+    }
 
     void rebuildAdminDashboardForUser(paymentData.userId).catch((err) =>
       console.error('[FixPayment] rebuildAdminDashboard error:', err)

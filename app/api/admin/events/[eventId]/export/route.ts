@@ -38,12 +38,25 @@ export async function GET(
       return Response.json({ error: 'Event not found' }, { status: 404 });
     }
 
-    const passesSnap = await db
+    const passesBySelectedSnap = await db
       .collection('passes')
       .where('selectedEvents', 'array-contains', eventId)
       .get();
+    type PassDoc = (typeof passesBySelectedSnap.docs)[number];
+    const passDocsById = new Map<string, PassDoc>();
+    for (const doc of passesBySelectedSnap.docs) passDocsById.set(doc.id, doc);
+    try {
+      const passesByEventIdsSnap = await db
+        .collection('passes')
+        .where('eventIds', 'array-contains', eventId)
+        .get();
+      for (const doc of passesByEventIdsSnap.docs) if (!passDocsById.has(doc.id)) passDocsById.set(doc.id, doc);
+    } catch {
+      // eventIds index may not exist yet
+    }
+    const passDocs = [...passDocsById.values()];
 
-    const userIds = [...new Set(passesSnap.docs.map((d) => getString(d.data() as Record<string, unknown>, 'userId')).filter(Boolean))] as string[];
+    const userIds = [...new Set(passDocs.map((d) => getString(d.data() as Record<string, unknown>, 'userId')).filter(Boolean))] as string[];
     const userDocs = await Promise.all(userIds.map((id) => db.collection('users').doc(id).get()));
     const usersById = new Map<string, Record<string, unknown>>();
     userDocs.forEach((doc, i) => {
@@ -53,7 +66,7 @@ export async function GET(
     const headers = ['Name', 'Email', 'College', 'Phone', 'Pass Type', 'Pass Status', 'Team Name', 'Registered At'];
     const rows: string[][] = [headers];
 
-    for (const doc of passesSnap.docs) {
+    for (const doc of passDocs) {
       const d = doc.data() as Record<string, unknown>;
       const userId = getString(d, 'userId') ?? '';
       const user = usersById.get(userId) ?? {};

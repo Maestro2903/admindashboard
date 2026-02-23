@@ -64,8 +64,11 @@ One document per payment attempt. Linked to Cashfree by `cashfreeOrderId` (or `o
 | `archivedBy` | string \| null | UID of admin who archived |
 | `fixedManually` | boolean | Set when fix-stuck-payment updates status to success |
 | `adminNote` | string | Optional note from admin |
+| `eventIds` | string[] | Canonical event document IDs (backfilled by migration) |
+| `eventCategory` | string | Optional; from first event (for filtering) |
+| `eventType` | string | Optional; from first event (for filtering) |
 
-Indexes used: `status` ASC + `createdAt` DESC (see `firestore.indexes.json`).
+Indexes used: `status` ASC + `createdAt` DESC; `eventIds` (array-contains) + status/createdAt (see `firestore.indexes.json`).
 
 ---
 
@@ -86,7 +89,10 @@ One document per issued pass (created when payment succeeds, or by fix-stuck-pay
 | `scannedBy` | string \| null | UID of organizer who scanned |
 | `teamId` | string | For group_events; team document ID |
 | `teamSnapshot` | object | Snapshot of team at pass creation: teamName, totalMembers, members[] |
-| `selectedEvents` | string[] | Event document IDs |
+| `eventIds` | string[] | Canonical event IDs (required after migration; prefer over selectedEvents for queries) |
+| `eventCategory` | string | Optional; from event doc (for filtering) |
+| `eventType` | string | Optional; from event doc (for filtering) |
+| `selectedEvents` | string[] | Event document IDs (legacy; use eventIds when present) |
 | `eventId` / `selectedEvent` | string | Single event ID (legacy/alternate) |
 | `selectedDay` | string | For day_pass |
 | `isArchived` | boolean | Soft-archive flag |
@@ -110,6 +116,7 @@ Used for group events. Linked to a pass via `passId` after payment success.
 | `totalMembers` | number | Member count |
 | `paymentStatus` | string | e.g. pending, success |
 | `passId` | string | Pass document ID after payment |
+| `eventIds` | string[] | Optional; backfilled from linked pass |
 | `createdAt` | Timestamp | Creation time |
 | `updatedAt` | Timestamp \| Date | Last update |
 | `isArchived` | boolean | Optional |
@@ -143,12 +150,15 @@ Read-optimized aggregated document **per user**. Document ID = `userId`. Built a
 |-------|------|-------------|
 | `userId` | string | Same as document ID |
 | `profile` | object | name, email, phone, college, isOrganizer, createdAt |
-| `payments` | array | { paymentId, amount, passType, status, createdAt } |
-| `passes` | array | { passId, passType, status, amount, createdAt, usedAt?, teamId? } |
-| `teams` | array | { teamId, teamName, totalMembers, paymentStatus, passId? } |
+| `payments` | array | { paymentId, amount, passType, status, createdAt, eventIds?, eventCategory?, eventType? } |
+| `passes` | array | { passId, passType, status, amount, createdAt, usedAt?, teamId?, eventIds?, eventCategory?, eventType? } |
+| `teams` | array | { teamId, teamName, totalMembers, paymentStatus, passId?, eventIds? } |
 | `summary` | object | totalPayments, totalAmountPaid, totalPasses, totalTeams |
 | `filterPassTypes` | string[] | Unique pass types for filtering |
 | `filterPaymentStatuses` | string[] | Unique payment statuses for filtering |
+| `filterEventIds` | string[] | Unique event IDs for filtering |
+| `filterEventCategories` | string[] | Unique event categories for filtering |
+| `filterEventTypes` | string[] | Unique event types for filtering |
 | `updatedAt` | Timestamp | Last rebuild time |
 
 Used by `GET /api/dashboard` with optional filters: `profile.college`, `filterPassTypes`, `filterPaymentStatuses`, and cursor-based pagination on `updatedAt` desc.
@@ -180,7 +190,9 @@ Audit log for admin mutations. Each document is one log entry. Sensitive fields 
 - **users** ← **passes**: `passes.userId` = `users.id`
 - **payments** → **passes**: `passes.paymentId` references payment doc (or order ID)
 - **teams** → **passes**: `passes.teamId` = `teams.id`; `teams.passId` = `passes.id` after payment
-- **passes** → **events**: `passes.selectedEvents` or `passes.eventId` / `selectedEvent` reference `events.id`
+- **passes** → **events**: `passes.eventIds` (canonical) or `passes.selectedEvents` / `eventId` / `selectedEvent` (legacy) reference `events.id`
+- **payments** → **events**: `payments.eventIds` (canonical; backfilled from pass)
+- **teams** → **events**: `teams.eventIds` (optional; backfilled from linked pass)
 - **admin_dashboard**: One doc per user; aggregates that user’s payments, passes, teams.
 
 ---

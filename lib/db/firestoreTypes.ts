@@ -46,6 +46,9 @@ export interface AdminDashboardDoc {
     passType: string;
     status: 'pending' | 'success' | 'failed';
     createdAt: Timestamp | Date | null;
+    eventIds?: string[];
+    eventCategory?: string;
+    eventType?: string;
   }>;
   passes: Array<{
     passId: string;
@@ -55,6 +58,9 @@ export interface AdminDashboardDoc {
     createdAt: Timestamp | Date | null;
     usedAt?: Timestamp | Date | null;
     teamId?: string;
+    eventIds?: string[];
+    eventCategory?: string;
+    eventType?: string;
   }>;
   teams: Array<{
     teamId: string;
@@ -62,6 +68,7 @@ export interface AdminDashboardDoc {
     totalMembers: number;
     paymentStatus: string;
     passId?: string;
+    eventIds?: string[];
   }>;
   summary: {
     totalPayments: number;
@@ -71,5 +78,8 @@ export interface AdminDashboardDoc {
   };
   filterPassTypes?: string[];
   filterPaymentStatuses?: string[];
+  filterEventIds?: string[];
+  filterEventCategories?: string[];
+  filterEventTypes?: string[];
   updatedAt: Timestamp | Date;
 }

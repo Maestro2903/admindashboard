@@ -3,6 +3,7 @@ import type { DocumentData, Query } from 'firebase-admin/firestore';
 import { requireAdminRole, forbiddenRole } from '@/lib/admin/requireAdminRole';
 import { getAdminFirestore } from '@/lib/firebase/adminApp';
 import { rateLimitAdmin, rateLimitResponse } from '@/lib/security/adminRateLimiter';
+import { getEventIdsFromPass, resolveEventCategoryType } from '@/lib/events/eventResolution';
 import type {
   AdminEvent,
   CleanUnifiedRecordWithId,
@@ -124,6 +125,8 @@ export async function GET(req: NextRequest) {
 
     const passType = (searchParams.get('passType') || '').trim() || null;
     const eventId = (searchParams.get('eventId') || '').trim() || null;
+    const eventCategory = (searchParams.get('eventCategory') || '').trim() || null;
+    const eventType = (searchParams.get('eventType') || '').trim() || null;
     const q = (searchParams.get('q') || '').trim().toLowerCase() || null;
 
     const includeMetrics = searchParams.get('includeMetrics') !== '0';
@@ -134,9 +137,12 @@ export async function GET(req: NextRequest) {
     const db = getAdminFirestore();
 
     // Primary pagination is pass-based (one record per pass). Success-only filter applied after join.
+    // eventId: use selectedEvents for compatibility with legacy docs; eventIds used in display/resolution.
     let basePassQuery: Query<DocData> = db.collection('passes');
     if (passType) basePassQuery = basePassQuery.where('passType', '==', passType);
     if (eventId) basePassQuery = basePassQuery.where('selectedEvents', 'array-contains', eventId);
+    if (eventCategory) basePassQuery = basePassQuery.where('eventCategory', '==', eventCategory);
+    if (eventType) basePassQuery = basePassQuery.where('eventType', '==', eventType);
     if (fromDate) {
       const from = new Date(fromDate);
       if (!Number.isNaN(from.getTime())) basePassQuery = basePassQuery.where('createdAt', '>=', from);
@@ -222,13 +228,7 @@ export async function GET(req: NextRequest) {
     );
 
     const selectedEventIds = uniqStrings(
-      slicedPassDocs.flatMap((d) => {
-        const rec = (d.data() as Record<string, unknown>) ?? {};
-        const ids = getStringArray(rec, 'selectedEvents');
-        const singleId = getString(rec, 'eventId') ?? getString(rec, 'selectedEvent');
-        if (singleId && !ids.includes(singleId)) ids.push(singleId);
-        return ids;
-      })
+      slicedPassDocs.flatMap((d) => getEventIdsFromPass((d.data() as Record<string, unknown>) ?? {}))
     );
 
     const [userDocs, paymentDocs, eventDocs] = await Promise.all([
@@ -277,17 +277,14 @@ export async function GET(req: NextRequest) {
       const paymentStatusRaw = typeof payment.status === 'string' ? payment.status : '';
       if (paymentStatusRaw !== 'success') continue;
 
-      const selectedEvents = getStringArray(d, 'selectedEvents');
-      const singleEventId = getString(d, 'eventId') ?? getString(d, 'selectedEvent');
-      const eventIdsForPass = singleEventId && !selectedEvents.includes(singleEventId)
-        ? [...selectedEvents, singleEventId]
-        : selectedEvents;
+      const eventIdsForPass = getEventIdsFromPass(d);
       const eventNames = eventIdsForPass
         .map((id) => eventsById.get(id)?.name ?? id)
         .filter(Boolean);
       const teamSnapshot = asRecord(d.teamSnapshot);
       const passTypeStr = getString(d, 'passType') ?? '';
       const eventName = deriveEventName(passTypeStr, d, teamSnapshot, eventNames);
+      const { eventCategory: recCategory, eventType: recType } = resolveEventCategoryType(d, eventIdsForPass, eventsById);
       const createdAt = toIso(d.createdAt) ?? new Date(0).toISOString();
       const amount = Number((payment as Record<string, unknown>).amount) || 0;
       const orderId =
@@ -309,6 +306,8 @@ export async function GET(req: NextRequest) {
         createdAt,
         amount,
         orderId,
+        eventCategory: recCategory,
+        eventType: recType,
       });
     }
 
@@ -338,6 +337,8 @@ export async function GET(req: NextRequest) {
             paymentStatus: r.paymentStatus,
             orderId: r.orderId,
             createdAt: r.createdAt,
+            ...(r.eventCategory && { eventCategory: r.eventCategory }),
+            ...(r.eventType && { eventType: r.eventType }),
           }))
         : [];
     const operationsRecords: OperationsRecord[] =
@@ -352,6 +353,8 @@ export async function GET(req: NextRequest) {
             passType: r.passType,
             payment: 'Confirmed' as const,
             createdAt: r.createdAt,
+            ...(r.eventCategory && { eventCategory: r.eventCategory }),
+            ...(r.eventType && { eventType: r.eventType }),
           }))
         : [];
 

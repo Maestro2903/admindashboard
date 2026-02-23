@@ -150,6 +150,8 @@ function OperationsClientInner() {
   const [search, setSearch] = React.useState(searchParams.get('q') ?? '');
   const [passType, setPassType] = React.useState(searchParams.get('passType') ?? 'all');
   const [eventId, setEventId] = React.useState(searchParams.get('eventId') ?? 'all');
+  const [eventCategory, setEventCategory] = React.useState(searchParams.get('eventCategory') ?? 'all');
+  const [eventType, setEventType] = React.useState(searchParams.get('eventType') ?? 'all');
   const [dateFrom, setDateFrom] = React.useState(searchParams.get('from') ?? '');
   const [dateTo, setDateTo] = React.useState(searchParams.get('to') ?? '');
 
@@ -202,10 +204,12 @@ function OperationsClientInner() {
     if (search.trim()) params.set('q', search.trim());
     if (passType && passType !== 'all') params.set('passType', passType);
     if (eventId && eventId !== 'all') params.set('eventId', eventId);
+    if (eventCategory && eventCategory !== 'all') params.set('eventCategory', eventCategory);
+    if (eventType && eventType !== 'all') params.set('eventType', eventType);
     if (dateFrom) params.set('from', dateFrom);
     if (dateTo) params.set('to', dateTo);
     return params.toString();
-  }, [cursor, search, passType, eventId, dateFrom, dateTo]);
+  }, [cursor, search, passType, eventId, eventCategory, eventType, dateFrom, dateTo]);
 
   // Fetch data
   React.useEffect(() => {
@@ -242,6 +246,8 @@ function OperationsClientInner() {
       if (search.trim()) params.set('q', search.trim());
       if (passType && passType !== 'all') params.set('passType', passType);
       if (eventId && eventId !== 'all') params.set('eventId', eventId);
+      if (eventCategory && eventCategory !== 'all') params.set('eventCategory', eventCategory);
+      if (eventType && eventType !== 'all') params.set('eventType', eventType);
       if (dateFrom) params.set('from', dateFrom);
       if (dateTo) params.set('to', dateTo);
       const token = await user.getIdToken(false);
@@ -258,7 +264,7 @@ function OperationsClientInner() {
     } catch (e) {
       console.error(e);
     }
-  }, [user, search, passType, eventId, dateFrom, dateTo]);
+  }, [user, search, passType, eventId, eventCategory, eventType, dateFrom, dateTo]);
 
   const dateFmt = React.useMemo(
     () =>
@@ -363,6 +369,42 @@ function OperationsClientInner() {
                 </SelectContent>
               </Select>
             </div>
+            {[...new Set(events.map((e) => e.category).filter(Boolean))].length > 0 ? (
+              <div>
+                <label htmlFor="filter-event-category" className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 mb-1.5 block">
+                  Category
+                </label>
+                <Select value={eventCategory} onValueChange={(v) => { setEventCategory(v); setCursorStack([]); }}>
+                  <SelectTrigger id="filter-event-category" className="bg-zinc-800 border-zinc-700 text-zinc-300">
+                    <SelectValue placeholder="All" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-zinc-800 border-zinc-700 text-zinc-300">
+                    <SelectItem value="all">All</SelectItem>
+                    {[...new Set(events.map((e) => e.category).filter((c): c is string => Boolean(c)))].sort().map((c) => (
+                      <SelectItem key={c} value={c}>{c}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : null}
+            {[...new Set(events.map((e) => e.type).filter(Boolean))].length > 0 ? (
+              <div>
+                <label htmlFor="filter-event-type" className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 mb-1.5 block">
+                  Type
+                </label>
+                <Select value={eventType} onValueChange={(v) => { setEventType(v); setCursorStack([]); }}>
+                  <SelectTrigger id="filter-event-type" className="bg-zinc-800 border-zinc-700 text-zinc-300">
+                    <SelectValue placeholder="All" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-zinc-800 border-zinc-700 text-zinc-300">
+                    <SelectItem value="all">All</SelectItem>
+                    {[...new Set(events.map((e) => e.type).filter((t): t is string => Boolean(t)))].sort().map((t) => (
+                      <SelectItem key={t} value={t}>{t}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : null}
             <div>
               <label htmlFor="filter-date-from" className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 mb-1.5 block">
                 From Date

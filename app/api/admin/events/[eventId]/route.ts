@@ -47,16 +47,28 @@ export async function GET(
       isActive: typeof eventData.isActive === 'boolean' ? eventData.isActive : undefined,
     };
 
-    const passesSnap = await db
+    const passesBySelectedSnap = await db
       .collection('passes')
       .where('selectedEvents', 'array-contains', eventId)
       .get();
+    type PassDoc = (typeof passesBySelectedSnap.docs)[number];
+    const passDocsById = new Map<string, PassDoc>();
+    for (const doc of passesBySelectedSnap.docs) passDocsById.set(doc.id, doc);
+    try {
+      const passesByEventIdsSnap = await db
+        .collection('passes')
+        .where('eventIds', 'array-contains', eventId)
+        .get();
+      for (const doc of passesByEventIdsSnap.docs) if (!passDocsById.has(doc.id)) passDocsById.set(doc.id, doc);
+    } catch {
+      // eventIds index may not exist yet; selectedEvents is sufficient for legacy
+    }
 
-    let totalRegistrations = passesSnap.size;
+    const totalRegistrations = passDocsById.size;
     let totalCheckIns = 0;
     const teamIds = new Set<string>();
 
-    for (const doc of passesSnap.docs) {
+    for (const doc of passDocsById.values()) {
       const d = doc.data() as Record<string, unknown>;
       if (d.status === 'used' || d.usedAt) totalCheckIns += 1;
       const tid = getString(d, 'teamId');

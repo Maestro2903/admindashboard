@@ -17,6 +17,9 @@ export async function GET(req: NextRequest) {
     const college = searchParams.get('college') || null;
     const passType = searchParams.get('passType') || null;
     const paymentStatus = searchParams.get('paymentStatus') || null;
+    const eventId = searchParams.get('eventId')?.trim() || null;
+    const eventCategory = searchParams.get('eventCategory')?.trim() || null;
+    const eventType = searchParams.get('eventType')?.trim() || null;
 
     const db = getAdminFirestore();
 
@@ -31,6 +34,12 @@ export async function GET(req: NextRequest) {
       query = query.where('filterPassTypes', 'array-contains', passType);
     } else if (paymentStatus) {
       query = query.where('filterPaymentStatuses', 'array-contains', paymentStatus);
+    } else if (eventId) {
+      query = query.where('filterEventIds', 'array-contains', eventId);
+    } else if (eventCategory) {
+      query = query.where('filterEventCategories', 'array-contains', eventCategory);
+    } else if (eventType) {
+      query = query.where('filterEventTypes', 'array-contains', eventType);
     }
 
     if (cursor) {

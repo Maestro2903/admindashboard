@@ -111,6 +111,8 @@ export interface CleanUnifiedRecord {
   passType: string;
   paymentStatus: 'success';
   createdAt: string;
+  eventCategory?: string;
+  eventType?: string;
 }
 
 /** CleanUnifiedRecord + passId for row identity and bulk/detail actions (not displayed). */
@@ -131,6 +133,8 @@ export interface FinancialRecord {
   paymentStatus: string;
   orderId: string;
   createdAt: string;
+  eventCategory?: string;
+  eventType?: string;
 }
 
 /** Operations view record. No amount, orderId, or internal IDs. */
@@ -144,6 +148,8 @@ export interface OperationsRecord {
   passType: string;
   payment: 'Confirmed';
   createdAt: string;
+  eventCategory?: string;
+  eventType?: string;
 }
 
 export interface UnifiedAdminRecord {
@@ -189,6 +195,8 @@ export interface OverviewMetrics {
 export interface FilterOptions {
   passTypes: string[];
   events: Array<{ id: string; name: string }>;
+  eventCategories: string[];
+  eventTypes: string[];
   passStatuses: PassStatus[];
   paymentStatuses: PaymentStatus[];
 }
@@ -234,6 +242,8 @@ export interface UnifiedDashboardQuery {
   cursor?: string | null;
   passType?: string | null;
   eventId?: string | null;
+  eventCategory?: string | null;
+  eventType?: string | null;
   from?: string | null;
   to?: string | null;
   q?: string | null;

@@ -3,6 +3,7 @@ import type { DocumentData, QueryDocumentSnapshot } from 'firebase-admin/firesto
 import { requireOrganizer } from '@/lib/admin/requireOrganizer';
 import { getAdminFirestore } from '@/lib/firebase/adminApp';
 import { rateLimitAdmin, rateLimitResponse } from '@/lib/security/adminRateLimiter';
+import { getEventIdsFromPass } from '@/lib/events/eventResolution';
 import type {
   GroupEventsMember,
   GroupEventsTeam,
@@ -157,6 +158,9 @@ export async function GET(req: NextRequest) {
     const pageSize = clampInt(searchParams.get('pageSize'), 50, 1, 100);
     const fromParam = searchParams.get('from')?.trim() || null;
     const toParam = searchParams.get('to')?.trim() || null;
+    const eventIdParam = searchParams.get('eventId')?.trim() || null;
+    const eventCategoryParam = searchParams.get('eventCategory')?.trim() || null;
+    const eventTypeParam = searchParams.get('eventType')?.trim() || null;
     const includeSummary = searchParams.get('includeSummary') === '1';
 
     let fromDate: Date | null = null;
@@ -206,6 +210,12 @@ export async function GET(req: NextRequest) {
     let passDocs = passSnap.docs.filter((d) => {
       const data = d.data() as Record<string, unknown>;
       if (data?.isArchived === true) return false;
+      if (eventIdParam) {
+        const ids = getEventIdsFromPass(data);
+        if (!ids.includes(eventIdParam)) return false;
+      }
+      if (eventCategoryParam && getString(data, 'eventCategory') !== eventCategoryParam) return false;
+      if (eventTypeParam && getString(data, 'eventType') !== eventTypeParam) return false;
       if (fromDate || toDate) {
         const created = data?.createdAt as { toDate?: () => Date } | Date | undefined;
         const createdDate =

@@ -74,9 +74,9 @@ Middleware uses prefix `rl:mw:*`; route-level limiter uses `rl:admin:*`. Identif
 
 **Auth:** requireOrganizer. **Rate limit:** dashboard.
 
-**Query:** `limit` (default 20, max 100), `cursor`, `college`, `passType`, `paymentStatus`.
+**Query:** `limit` (default 20, max 100), `cursor`, `college`, `passType`, `paymentStatus`, `eventId`, `eventCategory`, `eventType`.
 
-**Response:** `{ documents, nextCursor, count }` — each document is an admin_dashboard doc (userId, profile, payments, passes, teams, summary, filterPassTypes, filterPaymentStatuses, updatedAt serialized).
+**Response:** `{ documents, nextCursor, count }` — each document is an admin_dashboard doc (userId, profile, payments, passes, teams, summary, filterPassTypes, filterPaymentStatuses, filterEventIds, filterEventCategories, filterEventTypes, updatedAt serialized).
 
 **Errors:** 401, 403, 429, 500.
 
@@ -110,7 +110,7 @@ Middleware uses prefix `rl:mw:*`; route-level limiter uses `rl:admin:*`. Identif
 
 **Auth:** requireOrganizer. **Rate limit:** dashboard.
 
-**Query:** `includeArchived` (1 to include archived).
+**Query:** `includeArchived` (1 to include archived), `eventId`, `eventCategory`, `eventType` (filter by event linkage).
 
 **Response:** `{ payments, count }`. Each payment: id, userId, name, email, amount, status, passType, cashfreeOrderId, createdAt, updatedAt, isArchived.
 
@@ -150,7 +150,7 @@ Middleware uses prefix `rl:mw:*`; route-level limiter uses `rl:admin:*`. Identif
 
 **Query:**  
 `mode` = `financial` | `operations` (default operations).  
-`page`, `pageSize` (default 50, max 100; CSV: max 2000), `cursor`, `passType`, `eventId`, `from`, `to` (date range), `q` (search name/email), `format` = `csv`, `includeMetrics` (default 1), `includeArchived` (1 to include).
+`page`, `pageSize` (default 50, max 100; CSV: max 2000), `cursor`, `passType`, `eventId`, `eventCategory`, `eventType`, `from`, `to` (date range), `q` (search name/email), `format` = `csv`, `includeMetrics` (default 1), `includeArchived` (1 to include).
 
 **Response (JSON):**  
 - Operations: `{ records: OperationsRecord[], page, pageSize, nextCursor?, metrics?, total?, totalPages? }`.  
@@ -167,7 +167,7 @@ Records are success-only; financial includes amount, paymentId, orderId; operati
 
 **Auth:** requireOrganizer. **Rate limit:** dashboard.
 
-**Query:** `type` (required: day_pass | group_events | proshow | sana_concert), `page`, `pageSize` (default 50, max 100), `from`, `to`, `includeSummary` (1 for summary).
+**Query:** `type` (required: day_pass | group_events | proshow | sana_concert), `eventId`, `eventCategory`, `eventType`, `page`, `pageSize` (default 50, max 100), `from`, `to`, `includeSummary` (1 for summary).
 
 **Response:** PassManagementResponse: `{ records: PassManagementRecord[], page, pageSize, total?, summary? }`. Summary includes totalSold, totalRevenue, totalUsed, remaining; for group_events also totalTeams, totalParticipants, checkedInCount.
 

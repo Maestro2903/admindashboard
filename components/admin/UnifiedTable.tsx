@@ -52,6 +52,8 @@ function formatDate(iso: unknown): string {
 export type UnifiedTableFilters = {
   passType?: string;
   eventId?: string;
+  eventCategory?: string;
+  eventType?: string;
   q?: string;
   from?: string;
   to?: string;
@@ -326,6 +328,14 @@ export function UnifiedTable({
     );
   }, [data]);
 
+  const eventCategories = React.useMemo(() => {
+    return [...new Set(events.map((e) => e.category).filter((c): c is string => Boolean(c)))].sort((a, b) => a.localeCompare(b));
+  }, [events]);
+
+  const eventTypes = React.useMemo(() => {
+    return [...new Set(events.map((e) => e.type).filter((t): t is string => Boolean(t)))].sort((a, b) => a.localeCompare(b));
+  }, [events]);
+
   const hasSelection = Object.keys(rowSelectionState).length > 0;
 
   return (
@@ -373,6 +383,46 @@ export function UnifiedTable({
             ))}
           </SelectContent>
         </Select>
+        {eventCategories.length > 0 ? (
+          <Select
+            value={filters.eventCategory ?? ALL}
+            onValueChange={(v) =>
+              onFiltersChange({ ...filters, eventCategory: v === ALL ? undefined : v })
+            }
+          >
+            <SelectTrigger className="min-w-[140px] bg-white border-slate-200 text-slate-900">
+              <SelectValue placeholder="Category" />
+            </SelectTrigger>
+            <SelectContent className="border-slate-200 bg-white text-slate-900">
+              <SelectItem value={ALL}>All categories</SelectItem>
+              {eventCategories.map((c) => (
+                <SelectItem key={c} value={c}>
+                  {c}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : null}
+        {eventTypes.length > 0 ? (
+          <Select
+            value={filters.eventType ?? ALL}
+            onValueChange={(v) =>
+              onFiltersChange({ ...filters, eventType: v === ALL ? undefined : v })
+            }
+          >
+            <SelectTrigger className="min-w-[140px] bg-white border-slate-200 text-slate-900">
+              <SelectValue placeholder="Type" />
+            </SelectTrigger>
+            <SelectContent className="border-slate-200 bg-white text-slate-900">
+              <SelectItem value={ALL}>All types</SelectItem>
+              {eventTypes.map((t) => (
+                <SelectItem key={t} value={t}>
+                  {t}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : null}
       </div>
 
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden w-full">

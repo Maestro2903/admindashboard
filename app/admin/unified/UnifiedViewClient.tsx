@@ -37,9 +37,11 @@ function UnifiedViewClientInner() {
     const q = searchParams.get('q') ?? '';
     const passType = searchParams.get('passType') ?? undefined;
     const eventId = searchParams.get('eventId') ?? undefined;
+    const eventCategory = searchParams.get('eventCategory') ?? undefined;
+    const eventType = searchParams.get('eventType') ?? undefined;
     const from = searchParams.get('from') ?? undefined;
     const to = searchParams.get('to') ?? undefined;
-    return { q, passType, eventId, from, to };
+    return { q, passType, eventId, eventCategory, eventType, from, to };
   });
 
   const [cursorStack, setCursorStack] = React.useState<string[]>([]);
@@ -69,11 +71,13 @@ function UnifiedViewClientInner() {
     const q = searchParams.get('q') ?? '';
     const passType = searchParams.get('passType') ?? undefined;
     const eventId = searchParams.get('eventId') ?? undefined;
+    const eventCategory = searchParams.get('eventCategory') ?? undefined;
+    const eventType = searchParams.get('eventType') ?? undefined;
     const from = searchParams.get('from') ?? undefined;
     const to = searchParams.get('to') ?? undefined;
     setFilters((prev) =>
-      prev.q !== q || prev.passType !== passType || prev.eventId !== eventId || prev.from !== from || prev.to !== to
-        ? { q, passType, eventId, from, to }
+      prev.q !== q || prev.passType !== passType || prev.eventId !== eventId || prev.eventCategory !== eventCategory || prev.eventType !== eventType || prev.from !== from || prev.to !== to
+        ? { q, passType, eventId, eventCategory, eventType, from, to }
         : prev
     );
   }, [searchParams]);
@@ -107,6 +111,8 @@ function UnifiedViewClientInner() {
     if (filters.q?.trim()) params.set('q', filters.q.trim());
     if (filters.passType) params.set('passType', filters.passType);
     if (filters.eventId) params.set('eventId', filters.eventId);
+    if (filters.eventCategory) params.set('eventCategory', filters.eventCategory);
+    if (filters.eventType) params.set('eventType', filters.eventType);
     if (filters.from) params.set('from', filters.from);
     if (filters.to) params.set('to', filters.to);
     return params.toString();
@@ -184,6 +190,8 @@ function UnifiedViewClientInner() {
       if (filters.q?.trim()) params.set('q', filters.q.trim());
       if (filters.passType) params.set('passType', filters.passType);
       if (filters.eventId) params.set('eventId', filters.eventId);
+      if (filters.eventCategory) params.set('eventCategory', filters.eventCategory);
+      if (filters.eventType) params.set('eventType', filters.eventType);
       if (filters.from) params.set('from', filters.from);
       if (filters.to) params.set('to', filters.to);
       const token = await user.getIdToken(false);

@@ -22,11 +22,11 @@ This document describes the dashboard views, table structure, filtering, paginat
 
 ### Unified / Financial / Operations
 
-- **API:** GET /api/admin/unified-dashboard. Query: `mode`, `page`, `pageSize`, `cursor`, `passType`, `eventId`, `from`, `to`, `q`, `format`, `includeMetrics`, `includeArchived`.
+- **API:** GET /api/admin/unified-dashboard. Query: `mode`, `page`, `pageSize`, `cursor`, `passType`, `eventId`, `eventCategory`, `eventType`, `from`, `to`, `q`, `format`, `includeMetrics`, `includeArchived`.
 - **Pagination:** Page-based or cursor-based; `pageSize` default 50, max 100 (JSON). For `format=csv`, pageSize up to 2000.
 - **Response:** `records`, `page`, `pageSize`, `nextCursor`, optional `total`, `totalPages`, `metrics`, and for financial mode `summary.totalRevenue`.
-- **FinancialRecord (financial mode):** userId, passId, paymentId, name, email, college, phone, eventName, passType, amount, paymentStatus, orderId, createdAt.
-- **OperationsRecord (operations mode):** passId, name, email, college, phone, eventName, passType, payment: "Confirmed", createdAt. No amount, no orderId, no paymentId in the table.
+- **FinancialRecord (financial mode):** userId, passId, paymentId, name, email, college, phone, eventName, passType, amount, paymentStatus, orderId, createdAt, optional eventCategory, eventType.
+- **OperationsRecord (operations mode):** passId, name, email, college, phone, eventName, passType, payment: "Confirmed", createdAt, optional eventCategory, eventType. No amount, no orderId, no paymentId in the table.
 
 ### Pass Management
 
@@ -45,8 +45,8 @@ This document describes the dashboard views, table structure, filtering, paginat
 ## Filtering
 
 - **Unified dashboard:** `passType`, `eventId`, `from`, `to` (date range on pass createdAt), `q` (search in name/email, applied after fetch), `includeArchived` (1 to include archived passes).
-- **Pass management:** `type` (required), `from`, `to`, `includeSummary`. Archived passes are excluded unless the API supports includeArchived.
-- **Dashboard (admin_dashboard):** `college`, `passType`, `paymentStatus` (via filterPassTypes / filterPaymentStatuses), `limit`, `cursor`. `includeArchived` not applied to admin_dashboard in the dashboard route; payments/passes routes use includeArchived for their own lists.
+- **Pass management:** `type` (required), `eventId`, `eventCategory`, `eventType`, `from`, `to`, `includeSummary`. Archived passes are excluded unless the API supports includeArchived.
+- **Dashboard (admin_dashboard):** `college`, `passType`, `paymentStatus`, `eventId`, `eventCategory`, `eventType` (via filterEventIds / filterEventCategories / filterEventTypes when present), `limit`, `cursor`. `includeArchived` not applied to admin_dashboard in the dashboard route; payments/passes routes use includeArchived for their own lists.
 - **Payments / Users / Passes lists:** `includeArchived` (1 to include archived).
 - **Events:** `activeOnly` (default true), `includeArchived`.
 - **Export teams:** `includeArchived`.

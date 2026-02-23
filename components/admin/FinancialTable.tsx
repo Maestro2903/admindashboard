@@ -247,6 +247,14 @@ export function FinancialTable({
     () => [...new Set(data.map((d) => d.passType).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
     [data]
   );
+  const eventCategories = React.useMemo(
+    () => [...new Set(events.map((e) => e.category).filter((c): c is string => Boolean(c)))].sort((a, b) => a.localeCompare(b)),
+    [events]
+  );
+  const eventTypes = React.useMemo(
+    () => [...new Set(events.map((e) => e.type).filter((t): t is string => Boolean(t)))].sort((a, b) => a.localeCompare(b)),
+    [events]
+  );
   const hasSelection = Object.keys(rowSelectionState).length > 0;
 
   return (
@@ -292,6 +300,42 @@ export function FinancialTable({
               ))}
             </SelectContent>
           </Select>
+          {eventCategories.length > 0 ? (
+            <Select
+              value={filters.eventCategory ?? ALL}
+              onValueChange={(v) => onFiltersChange({ ...filters, eventCategory: v === ALL ? undefined : v })}
+            >
+              <SelectTrigger className="min-w-[140px] border-zinc-800 bg-zinc-950 text-white focus:ring-1 focus:ring-emerald-500">
+                <SelectValue placeholder="Category" />
+              </SelectTrigger>
+              <SelectContent className="border-zinc-800 bg-zinc-900 text-zinc-300">
+                <SelectItem value={ALL}>All categories</SelectItem>
+                {eventCategories.map((c) => (
+                  <SelectItem key={c} value={c}>
+                    {c}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : null}
+          {eventTypes.length > 0 ? (
+            <Select
+              value={filters.eventType ?? ALL}
+              onValueChange={(v) => onFiltersChange({ ...filters, eventType: v === ALL ? undefined : v })}
+            >
+              <SelectTrigger className="min-w-[140px] border-zinc-800 bg-zinc-950 text-white focus:ring-1 focus:ring-emerald-500">
+                <SelectValue placeholder="Type" />
+              </SelectTrigger>
+              <SelectContent className="border-zinc-800 bg-zinc-900 text-zinc-300">
+                <SelectItem value={ALL}>All types</SelectItem>
+                {eventTypes.map((t) => (
+                  <SelectItem key={t} value={t}>
+                    {t}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : null}
         </div>
       </div>
 

@@ -10,6 +10,7 @@ import {
   IconUsersGroup,
   IconUsers,
   IconLogout,
+  IconClipboardList,
 } from '@tabler/icons-react';
 
 export interface SidebarNavItem {
@@ -25,6 +26,9 @@ const NAV_ITEMS: SidebarNavItem[] = [
   { href: '/admin/passes', label: 'Passes', icon: IconTicket },
   { href: '/admin/teams', label: 'Teams', icon: IconUsersGroup },
   { href: '/admin/users', label: 'Users', icon: IconUsers },
+  // Registrations: visible only to editors (manager) and superadmins in the sidebar;
+  // route itself is additionally protected in AdminPanelShell.
+  { href: '/admin/registrations', label: 'Registrations', icon: IconClipboardList, superadminOnly: true },
 ];
 
 const MAIN_SITE_URL = process.env.NEXT_PUBLIC_MAIN_SITE_URL || 'https://takshashila26.in';
@@ -38,9 +42,11 @@ export function AppSidebar({
 }) {
   const pathname = usePathname();
 
-  const visibleItems = NAV_ITEMS.filter(
-    (item) => !item.superadminOnly || adminRole === 'superadmin'
-  );
+  const visibleItems = NAV_ITEMS.filter((item) => {
+    if (!item.superadminOnly) return true;
+    // Treat "manager" as editor role; both manager and superadmin can see registrations.
+    return adminRole === 'superadmin' || adminRole === 'manager';
+  });
 
   return (
     <aside className="fixed left-0 top-0 z-40 flex h-full w-[220px] flex-col border-r border-zinc-800 bg-[#0a0a0c]">

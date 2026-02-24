@@ -15,7 +15,6 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: 'Control Panel | CIT Takshashila',
   description: 'Event Operations Control System',
-  icons: { icon: '/tk-logo.svg' },
 };
 
 export default function RootLayout({

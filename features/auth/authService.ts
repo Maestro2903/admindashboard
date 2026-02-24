@@ -1,9 +1,13 @@
-import { GoogleAuthProvider, signInWithPopup, signOut as firebaseSignOut } from 'firebase/auth';
-import { auth, getAuthSafe } from '@/lib/firebase/clientApp';
+import { GoogleAuthProvider, signInWithRedirect, signOut as firebaseSignOut } from 'firebase/auth';
+import { getAuthSafe } from '@/lib/firebase/clientApp';
 
 const FIREBASE_NOT_CONFIGURED =
   'Firebase is not configured. Add NEXT_PUBLIC_FIREBASE_API_KEY, NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN, and NEXT_PUBLIC_FIREBASE_PROJECT_ID to .env.local';
 
+/**
+ * Redirects to Google sign-in. After sign-in, Firebase redirects back to the current page
+ * and AuthContext handles the result via getRedirectResult (no popup, avoids COOP errors).
+ */
 export async function signInWithGoogle() {
   const realAuth = getAuthSafe();
   if (!realAuth) {
@@ -14,23 +18,8 @@ export async function signInWithGoogle() {
   provider.addScope('email');
   provider.addScope('profile');
 
-  try {
-    return await signInWithPopup(realAuth, provider);
-  } catch (error: unknown) {
-    const err = error as { code?: string };
-    switch (err?.code) {
-      case 'auth/popup-blocked':
-        throw new Error('Popup was blocked. Please enable popups for this site and try again.');
-      case 'auth/popup-closed-by-user':
-        throw new Error('Sign-in cancelled before completion.');
-      case 'auth/network-request-failed':
-        throw new Error('Network error during sign-in. Please check your connection and try again.');
-      case 'auth/unauthorized-domain':
-        throw new Error('This domain is not authorized for Google sign-in. Please contact support.');
-      default:
-        throw error;
-    }
-  }
+  await signInWithRedirect(realAuth, provider);
+  // Page will redirect; result is handled on return by getRedirectResult in AuthContext
 }
 
 export async function signOut() {

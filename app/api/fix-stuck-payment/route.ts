@@ -101,11 +101,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const paymentsSnapshot = await db
+    let paymentsSnapshot = await db
       .collection('payments')
       .where('cashfreeOrderId', '==', orderId)
       .limit(1)
       .get();
+
+    // If not found in payments, check onspotPayments
+    if (paymentsSnapshot.empty) {
+      paymentsSnapshot = await db
+        .collection('onspotPayments')
+        .where('cashfreeOrderId', '==', orderId)
+        .limit(1)
+        .get();
+    }
 
     if (paymentsSnapshot.empty) {
       return NextResponse.json(

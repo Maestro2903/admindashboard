@@ -114,7 +114,7 @@ export async function POST(req: NextRequest) {
             },
             order_meta: {
                 ...(isProduction && isLocalhost ? {} : { notify_url: `${baseUrl}/api/webhooks/cashfree` }),
-                return_url: `${isProduction && isLocalhost ? baseUrl.replace('http://', 'https://') : baseUrl}/admin/registrations?order_id={order_id}`
+                return_url: `${baseUrl}/admin/registrations?order_id={order_id}`
             }
         };
 

@@ -1,10 +1,150 @@
 {
+  "KFfgZ6ZgabDf4YSINUnM": {
+    "userId": "1ZoqBUiQs7bAhIah5h0jMxffdXw2",
+    "name": "Shree Shanth R",
+    "email": "shreeshanthr2006@gmail.com",
+    "phone": "",
+    "college": "",
+    "passType": "day_pass",
+    "selectedEvents": [
+      "commit-kaaviyam"
+    ],
+    "selectedDays": [
+      "2026-02-26"
+    ],
+    "calculatedAmount": 500,
+    "status": "pending",
+    "createdAt": {
+      "_seconds": 1771938922,
+      "_nanoseconds": 384000000
+    }
+  },
+  "LTPwIxxP6XSU45SdCOPN": {
+    "userId": "1ZoqBUiQs7bAhIah5h0jMxffdXw2",
+    "name": "Shree Shanth R",
+    "email": "shreeshanthr2006@gmail.com",
+    "phone": "6382765347",
+    "college": "CHENNAI INSTITUTE OF TECHNOLOGY",
+    "passType": "group_events",
+    "selectedEvents": [
+      "case-files"
+    ],
+    "selectedDays": [],
+    "teamData": {
+      "teamName": "MAESTRO",
+      "leader": {
+        "name": "Shree Shanth R",
+        "phone": "6382765347",
+        "college": "CHENNAI INSTITUTE OF TECHNOLOGY"
+      },
+      "members": [
+        {
+          "name": "shreee shanth r",
+          "phone": "06382765347",
+          "email": "shreeshanthr06@gmail.com"
+        },
+        {
+          "name": "shreee shanth r",
+          "phone": "06382765347",
+          "email": "shreeshanthr06@gmail.com"
+        }
+      ]
+    },
+    "calculatedAmount": 750,
+    "status": "pending",
+    "createdAt": {
+      "_seconds": 1771938993,
+      "_nanoseconds": 995000000
+    }
+  },
+  "TyZfuupYnmOGAKZpVbMT": {
+    "userId": "rVVrTLog4VaW17MJcG5t55vAsSq2",
+    "name": "Hemanth Raj",
+    "email": "hemanthrajc.cs2023@citchennai.net",
+    "phone": "9245435888",
+    "college": "Chennai Institute of Technology",
+    "status": "pending",
+    "createdAt": {
+      "_seconds": 1771953909,
+      "_nanoseconds": 357000000
+    },
+    "calculatedAmount": 500,
+    "passType": "group_events",
+    "teamData": {
+      "teamName": "Linngesh",
+      "leader": {
+        "name": "Hemanth Raj",
+        "phone": "9245435888",
+        "college": "Chennai Institute of Technology"
+      },
+      "members": [
+        {
+          "name": "Lingay",
+          "phone": "10278586820",
+          "email": "linngay@gay.com"
+        }
+      ]
+    },
+    "selectedDays": [],
+    "teamId": "Fs2qqN15U2UZboYyvfif",
+    "selectedEvents": [
+      "borderland-protocol"
+    ],
+    "updatedAt": {
+      "_seconds": 1771956886,
+      "_nanoseconds": 456000000
+    }
+  },
+  "WYa75g19hpktBNEX2TKL": {
+    "userId": "1ZoqBUiQs7bAhIah5h0jMxffdXw2",
+    "name": "Shree Shanth R",
+    "email": "shreeshanthr2006@gmail.com",
+    "phone": "",
+    "college": "",
+    "passType": "sana_concert",
+    "selectedEvents": [
+      "big-data-cse"
+    ],
+    "selectedDays": [
+      "2026-02-26",
+      "2026-02-27",
+      "2026-02-28"
+    ],
+    "calculatedAmount": 2000,
+    "status": "pending",
+    "createdAt": {
+      "_seconds": 1771939041,
+      "_nanoseconds": 693000000
+    }
+  },
   "_init_": {
     "_dummy": true,
     "note": "Initial collection creation",
     "createdAt": {
       "_seconds": 1770215579,
       "_nanoseconds": 988000000
+    }
+  },
+  "gkdCBsYU0UAfmzlBqFX2": {
+    "userId": "rVVrTLog4VaW17MJcG5t55vAsSq2",
+    "name": "Hemanth Raj",
+    "email": "hemanthrajc.cs2023@citchennai.net",
+    "phone": "9245435888",
+    "college": "Chennai Institute of Technology",
+    "passType": "day_pass",
+    "selectedEvents": [
+      "big-data-cse",
+      "commit-kaaviyam",
+      "mlops-workshop"
+    ],
+    "selectedDays": [
+      "2026-02-26"
+    ],
+    "calculatedAmount": 500,
+    "status": "pending",
+    "createdAt": {
+      "_seconds": 1771952439,
+      "_nanoseconds": 785000000
     }
   },
   "test-reg-001": {

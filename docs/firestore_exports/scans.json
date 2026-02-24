@@ -116,6 +116,18 @@
       "_nanoseconds": 150000000
     }
   },
+  "6Hnpoqotn8wtsm99bYfn": {
+    "passId": "9CLAJmKhlEjFFYlPWZwK",
+    "memberId": null,
+    "scannerId": "device-id-placeholder",
+    "status": "valid",
+    "eventId": "gate",
+    "eventName": "Gate Entry",
+    "scannedAt": {
+      "_seconds": 1771946076,
+      "_nanoseconds": 3000000
+    }
+  },
   "6sQYyuOKmbSRJfeHHJOd": {
     "passId": "iNj7jLcKW4eqV6G92UQY",
     "memberId": null,
@@ -336,16 +348,6 @@
     "scannedAt": {
       "_seconds": 1771515498,
       "_nanoseconds": 841000000
-    }
-  },
-  "GCRyDEh2RlauJGbc57IP": {
-    "passId": "LhAl8RjdtsQJaPinmEaP",
-    "memberId": null,
-    "scannerId": "device-id-placeholder",
-    "status": "valid",
-    "scannedAt": {
-      "_seconds": 1771304374,
-      "_nanoseconds": 143000000
     }
   }
 }

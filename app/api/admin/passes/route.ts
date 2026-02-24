@@ -330,8 +330,6 @@ export async function GET(req: NextRequest) {
           ? getString(paymentCustomer, 'customer_phone') ?? getString(paymentCustomer, 'phone')
           : undefined) ??
         '';
-      const userCollege =
-        getString(user, 'college') ?? getString(payment as Record<string, unknown>, 'college') ?? '';
 
       const amount = Number((payment as Record<string, unknown>).amount) || 0;
       const createdAt = toIso(d.createdAt) ?? '';
@@ -355,11 +353,22 @@ export async function GET(req: NextRequest) {
         .filter(Boolean);
       const teamSnapshot = asRecord(d.teamSnapshot);
       const eventName = deriveEventName(type, d, teamSnapshot, eventNames);
+
+      // STEP 2: Safe college resolution with team fallback
+      const teamId = getString(d, 'teamId');
+      const team = teamId ? teamsById.get(teamId) : null;
+      const college =
+        getString(user, 'college') ??
+        getString(payment as Record<string, unknown>, 'college') ??
+        (team ? getString(team, 'leaderCollege') : null) ??
+        (teamSnapshot ? getString(teamSnapshot, 'leaderCollege') : null) ??
+        '';
+
       const base: PassManagementRecord = {
         passId: doc.id,
         paymentId: paymentId || undefined,
         userName,
-        college: userCollege,
+        college,
         phone: userPhone,
         eventName,
         eventNames: eventNames.length > 0 ? eventNames : undefined,
@@ -372,8 +381,7 @@ export async function GET(req: NextRequest) {
       };
 
       if (type === 'group_events') {
-        const teamId = getString(d, 'teamId');
-        const t = teamId ? teamsById.get(teamId) : null;
+        const t = team;
         if (t) {
           const members = t.members;
           base.totalMembers =
@@ -381,29 +389,20 @@ export async function GET(req: NextRequest) {
           base.checkedInCount = countCheckedIn(members);
           base.teamName = getString(t, 'teamName') ?? '';
           const teamPayload = buildGroupEventsTeam(teamId ?? '', t, paymentStatus);
-          teamPayload.leaderCollege = userCollege || getString(user, 'college') || '';
+          teamPayload.leaderCollege = college;
           base.team = teamPayload;
-          // If user info is missing (e.g. user document deleted), fall back to team leader details
+          // If user info is missing, fall back to team leader details
           if (!base.userName && teamPayload.leaderName) base.userName = teamPayload.leaderName;
           if (!base.phone && teamPayload.leaderPhone) base.phone = teamPayload.leaderPhone;
-          if (!base.college && teamPayload.leaderCollege) base.college = teamPayload.leaderCollege;
-        } else {
-          const teamSnapshot = d.teamSnapshot as Record<string, unknown> | undefined;
-          if (teamSnapshot) {
-            base.teamName = getString(teamSnapshot, 'teamName') ?? '';
-            base.totalMembers = getNumber(teamSnapshot, 'totalMembers');
-            base.checkedInCount = countCheckedIn(teamSnapshot.members);
-            base.team = buildGroupEventsTeam(
-              teamId ?? '',
-              teamSnapshot,
-              paymentStatus
-            );
-            base.team.leaderCollege = userCollege || getString(user, 'college') || '';
-            // Fallback to leader details from snapshot when user info is missing
-            if (!base.userName && base.team.leaderName) base.userName = base.team.leaderName;
-            if (!base.phone && base.team.leaderPhone) base.phone = base.team.leaderPhone;
-            if (!base.college && base.team.leaderCollege) base.college = base.team.leaderCollege;
-          }
+        } else if (teamSnapshot) {
+          base.teamName = getString(teamSnapshot, 'teamName') ?? '';
+          base.totalMembers = getNumber(teamSnapshot, 'totalMembers');
+          base.checkedInCount = countCheckedIn(teamSnapshot.members);
+          base.team = buildGroupEventsTeam(teamId ?? '', teamSnapshot, paymentStatus);
+          base.team.leaderCollege = college;
+          // Fallback to leader details from snapshot
+          if (!base.userName && base.team.leaderName) base.userName = base.team.leaderName;
+          if (!base.phone && base.team.leaderPhone) base.phone = base.team.leaderPhone;
         }
       }
 

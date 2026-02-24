@@ -9,10 +9,7 @@ import {
   IconScan,
   IconTicket,
   IconUsersGroup,
-  IconCreditCard,
   IconUsers,
-  IconFileText,
-  IconCurrencyRupee,
   IconLogout,
 } from '@tabler/icons-react';
 
@@ -29,10 +26,7 @@ const NAV_ITEMS: SidebarNavItem[] = [
   { href: '/admin/live-checkin', label: 'Live Check-In', icon: IconScan },
   { href: '/admin/passes', label: 'Passes', icon: IconTicket },
   { href: '/admin/teams', label: 'Teams', icon: IconUsersGroup },
-  { href: '/admin/payments', label: 'Payments', icon: IconCreditCard },
   { href: '/admin/users', label: 'Users', icon: IconUsers },
-  { href: '/admin/audit-logs', label: 'Audit Logs', icon: IconFileText },
-  { href: '/admin/financial', label: 'Financial View', icon: IconCurrencyRupee, superadminOnly: true },
 ];
 
 const MAIN_SITE_URL = process.env.NEXT_PUBLIC_MAIN_SITE_URL || 'https://takshashila26.in';

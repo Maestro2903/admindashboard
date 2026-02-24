@@ -11,6 +11,18 @@ export interface EventInfo {
   type?: string;
 }
 
+export interface AdminEventDisplayInput {
+  pass: Record<string, unknown>;
+  payment: Record<string, unknown> | null;
+  team?: Record<string, unknown> | null;
+}
+
+export interface AdminEventDisplay {
+  eventCategory: string;
+  eventDisplay: string | null;
+  dayDisplay: string | null;
+}
+
 /** Prefer eventIds; if missing, derive from selectedEvents + eventId/selectedEvent (pass legacy). */
 export function getEventIdsFromPass(doc: Record<string, unknown>): string[] {
   const eventIds = getStringArray(doc, 'eventIds');
@@ -46,6 +58,177 @@ export function resolveEventCategoryType(
   return {
     eventCategory: fromDoc.eventCategory ?? firstEvent?.category,
     eventType: fromDoc.eventType ?? firstEvent?.type,
+  };
+}
+
+/**
+ * Admin-only resolver for how passes should be displayed in tables.
+ *
+ * Columns:
+ * - TYPE  → always from payment.passType (frontend already maps to labels)
+ * - EVENT → varies by passType (see below)
+ * - DAY   → derived from selectedDays (date or range)
+ *
+ * This resolver is deterministic and only uses:
+ * - payments.passType
+ * - payments.selectedDays
+ * - payments.selectedEvents
+ * - passes.passType
+ * - teams.teamName
+ * - passes.teamSnapshot
+ */
+export function resolveAdminEventDisplay(input: AdminEventDisplayInput): AdminEventDisplay {
+  const { pass, payment, team } = input;
+
+  const passTypeRaw =
+    getString(payment ?? {}, 'passType') ??
+    getString(pass, 'passType') ??
+    '';
+  const passType = passTypeRaw as string;
+
+  // Helper to normalise day from selectedDays arrays or single fields.
+  const toIso = (value: unknown): string | null => {
+    if (!value) return null;
+    if (typeof value === 'string') return value;
+    const maybe = value as { toDate?: () => Date };
+    if (typeof maybe?.toDate === 'function') {
+      const d = maybe.toDate();
+      return d instanceof Date && !Number.isNaN(d.getTime()) ? d.toISOString() : null;
+    }
+    return null;
+  };
+
+  // Extract selectedDays from payment (primary) or pass; format to
+  // "27 Feb 2026" or "26–28 Feb 2026".
+  const formatDayLabel = (): string | null => {
+    const days =
+      (payment?.selectedDays as string[] | undefined) ??
+      (pass.selectedDays as string[] | undefined);
+    if (!Array.isArray(days) || days.length === 0) return null;
+
+    const sorted = [...days].sort();
+    const first = sorted[0];
+    const last = sorted[sorted.length - 1];
+
+    const toDate = (d: string): Date | null => {
+      const iso = toIso(d);
+      if (!iso) return null;
+      const parsed = new Date(iso);
+      return Number.isNaN(parsed.getTime()) ? null : parsed;
+    };
+
+    const firstDate = toDate(first);
+    const lastDate = toDate(last);
+    if (!firstDate || !lastDate) return null;
+
+    const fmt = new Intl.DateTimeFormat('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      timeZone: 'Asia/Kolkata',
+    });
+
+    if (sorted.length === 1) {
+      return fmt.format(firstDate);
+    }
+
+    const sameMonth =
+      firstDate.getUTCFullYear() === lastDate.getUTCFullYear() &&
+      firstDate.getUTCMonth() === lastDate.getUTCMonth();
+
+    const startDay = firstDate.getUTCDate().toString().padStart(2, '0');
+    const endDay = lastDate.getUTCDate().toString().padStart(2, '0');
+    const monthYear = fmt.format(firstDate).split(' ').slice(1).join(' ');
+
+    if (sameMonth) {
+      return `${startDay}–${endDay} ${monthYear}`;
+    }
+    // Different month/year: fall back to "26 Feb 2026 – 01 Mar 2026"
+    const fmtFull = (d: Date) =>
+      new Intl.DateTimeFormat('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        timeZone: 'Asia/Kolkata',
+      }).format(d);
+    return `${fmtFull(firstDate)} – ${fmtFull(lastDate)}`;
+  };
+
+  // Helper to convert an event slug like "solo-singing" into "Solo Singing".
+  const formatSlugLabel = (slug: string | undefined): string | null => {
+    if (!slug) return null;
+    return slug
+      .replace(/[-_]+/g, ' ')
+      .split(' ')
+      .filter(Boolean)
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(' ');
+  };
+
+  const dayDisplay = formatDayLabel();
+
+  // Day Pass
+  if (passType === 'day_pass') {
+    const selectedEvents =
+      (payment?.selectedEvents as string[] | undefined) ??
+      (pass.selectedEvents as string[] | undefined) ??
+      [];
+    const firstSlug = Array.isArray(selectedEvents) && selectedEvents.length > 0 ? selectedEvents[0] : undefined;
+
+    return {
+      eventCategory: 'Day Pass',
+      // Show primary event/competition (e.g. "Solo Singing").
+      eventDisplay: formatSlugLabel(firstSlug),
+      dayDisplay,
+    };
+  }
+
+  // Group Events
+  if (passType === 'group_events') {
+    const teamNameFromTeam = getString(team ?? {}, 'teamName');
+    const teamSnapshot = (pass as { teamSnapshot?: unknown }).teamSnapshot as
+      | Record<string, unknown>
+      | undefined;
+    const teamNameFromSnapshot = teamSnapshot ? getString(teamSnapshot, 'teamName') : undefined;
+
+    const eventDisplay = teamNameFromTeam ?? teamNameFromSnapshot ?? 'Group Event';
+
+    return {
+      eventCategory: 'Group Events',
+      eventDisplay,
+      dayDisplay,
+    };
+  }
+
+  // Proshow
+  if (passType === 'proshow') {
+    return {
+      eventCategory: 'Proshow',
+      eventDisplay: 'Proshow',
+      dayDisplay,
+    };
+  }
+
+  // Sana Concert
+  if (passType === 'sana_concert') {
+    const selectedEvents = (payment?.selectedEvents as string[] | undefined) ?? [];
+    const extraCount = Array.isArray(selectedEvents) ? selectedEvents.length : 0;
+    const base = 'Sana Concert';
+    const eventDisplay =
+      extraCount > 1 ? `${base} + ${extraCount} Events` : base;
+
+    return {
+      eventCategory: 'Sana Concert',
+      eventDisplay,
+      dayDisplay,
+    };
+  }
+
+  // Fallback for unknown / legacy types
+  return {
+    eventCategory: passType || 'Other',
+    eventDisplay: passType || 'Other',
+    dayDisplay: null,
   };
 }
 

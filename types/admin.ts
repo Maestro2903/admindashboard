@@ -279,12 +279,50 @@ export interface GroupEventsTeam {
   members: GroupEventsMember[];
 }
 
+// ─── New Admin Passes API contract ────────────────────────────────────────────
+
+export interface AdminPassRow {
+  id: string;
+  userId: string;
+  name: string;
+  phone: string;
+  college: string | null;
+  passType: string;
+  eventLabel: string | null;
+  selectedDay: string | null;
+  amount: number;
+  paymentStatus: string;
+  isUsed: boolean;
+  usedAt: string | null;
+  createdAt: string;
+}
+
+export interface AdminPassesSummary {
+  totalSold: number;
+  totalRevenue: number;
+  totalUsed: number;
+  usagePercentage: number;
+}
+
+export interface AdminPassesPagination {
+  page: number;
+  pageSize: number;
+  hasMore: boolean;
+}
+
+export interface AdminPassesResponse {
+  data: AdminPassRow[];
+  summary: AdminPassesSummary;
+  pagination: AdminPassesPagination;
+}
+
 export interface PassManagementRecord {
   passId: string;
   paymentId?: string;
   userName: string;
   college: string;
   phone: string;
+  /** Unified event display label resolved from pass/payment/team data */
   eventName: string;
   /** Full list of event names for this pass (if multi-event) */
   eventNames?: string[];

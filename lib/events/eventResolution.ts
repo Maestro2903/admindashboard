@@ -185,13 +185,20 @@ export function resolveAdminEventDisplay(input: AdminEventDisplayInput): AdminEv
 
   // Group Events
   if (passType === 'group_events') {
-    const teamNameFromTeam = getString(team ?? {}, 'teamName');
-    const teamSnapshot = (pass as { teamSnapshot?: unknown }).teamSnapshot as
-      | Record<string, unknown>
-      | undefined;
-    const teamNameFromSnapshot = teamSnapshot ? getString(teamSnapshot, 'teamName') : undefined;
+    // For group events, the Event column should reflect the actual
+    // event(s) the team registered for, not just the team name.
+    const selectedEvents =
+      (payment?.selectedEvents as string[] | undefined) ??
+      (pass.selectedEvents as string[] | undefined) ??
+      [];
 
-    const eventDisplay = teamNameFromTeam ?? teamNameFromSnapshot ?? 'Group Event';
+    const labels =
+      Array.isArray(selectedEvents) && selectedEvents.length > 0
+        ? selectedEvents.map((slug) => formatSlugLabel(slug) ?? slug)
+        : [];
+
+    const eventDisplay =
+      labels.length > 0 ? labels.join(', ') : 'Group Event';
 
     return {
       eventCategory: 'Group Events',

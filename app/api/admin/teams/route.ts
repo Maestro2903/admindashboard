@@ -1,0 +1,90 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { requireOrganizer } from '@/lib/admin/requireOrganizer';
+import { getAdminFirestore } from '@/lib/firebase/adminApp';
+import { rateLimitAdmin, rateLimitResponse } from '@/lib/security/adminRateLimiter';
+import type { DocumentData } from 'firebase-admin/firestore';
+
+function getString(rec: Record<string, unknown>, key: string): string | undefined {
+    const v = rec[key];
+    return typeof v === 'string' ? v : undefined;
+}
+
+function getNumber(rec: Record<string, unknown>, key: string): number | undefined {
+    const v = rec[key];
+    return typeof v === 'number' && Number.isFinite(v) ? v : undefined;
+}
+
+export async function GET(req: NextRequest) {
+    try {
+        const rl = await rateLimitAdmin(req, 'dashboard');
+        if (rl.limited) return rateLimitResponse(rl);
+
+        const result = await requireOrganizer(req);
+        if (result instanceof Response) return result;
+
+        const db = getAdminFirestore();
+
+        // The user explicitly requested to only include teams that have a "Group Pass"
+        // We achieve this by fetching only 'success' passes with passType === 'group_events'
+        const passesSnap = await db.collection('passes')
+            .where('passType', '==', 'group_events')
+            .limit(1000)
+            .get();
+
+        const teamIdsRaw = passesSnap.docs.map(doc => getString(doc.data() as Record<string, unknown>, 'teamId'));
+        const validTeamIds = [...new Set(teamIdsRaw.filter(Boolean))] as string[];
+
+        const teamMap = new Map<string, Record<string, unknown>>();
+
+        // Process in batches of 10 for Firestore 'in' query limitations or just Promise.all
+        if (validTeamIds.length > 0) {
+            const BATCH = 100;
+            for (let i = 0; i < validTeamIds.length; i += BATCH) {
+                const batch = validTeamIds.slice(i, i + BATCH);
+                const docs = await Promise.all(batch.map(id => db.collection('teams').doc(id).get()));
+
+                for (const doc of docs) {
+                    if (doc.exists) {
+                        teamMap.set(doc.id, doc.data() as Record<string, unknown>);
+                    }
+                }
+            }
+        }
+
+        const records = [];
+
+        // Attach team info mimicking the old data.records[].team structure that page.tsx expects
+        for (const [teamId, teamData] of teamMap.entries()) {
+            const membersRaw = teamData.members as Array<Record<string, unknown>> ?? [];
+            const paymentStatus = getString(teamData, 'paymentStatus') ?? getString(teamData, 'status') ?? 'success';
+
+            records.push({
+                eventName: getString(teamData, 'eventName') || 'Team Event',
+                passId: getString(teamData, 'passId') || '',
+                team: {
+                    teamId: teamId,
+                    teamName: getString(teamData, 'teamName') || '',
+                    leaderName: getString(teamData, 'leaderName') || '',
+                    leaderPhone: getString(teamData, 'leaderPhone') || '',
+                    totalMembers: getNumber(teamData, 'totalMembers') ?? membersRaw.length,
+                    paymentStatus: paymentStatus,
+                    members: membersRaw.map(m => ({
+                        memberId: getString(m, 'memberId'),
+                        name: getString(m, 'name') || '',
+                        phone: getString(m, 'phone') || '',
+                        isLeader: Boolean(m.isLeader),
+                        checkedIn: Boolean((m.attendance as Record<string, unknown>)?.checkedIn ?? m.checkedIn),
+                        checkInTime: getString((m.attendance as Record<string, unknown>) ?? m, 'checkInTime'),
+                        checkedInBy: getString((m.attendance as Record<string, unknown>) ?? m, 'checkedInBy'),
+                    }))
+                }
+            });
+        }
+
+        return NextResponse.json({ records });
+    } catch (error) {
+        console.error('Teams API error:', error);
+        const message = error instanceof Error ? error.message : 'Server error';
+        return NextResponse.json({ error: 'Internal server error', details: message }, { status: 500 });
+    }
+}

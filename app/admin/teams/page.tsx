@@ -50,7 +50,7 @@ export default function TeamsPage() {
       try {
         setLoading(true);
         const token = await user.getIdToken(false);
-        const res = await fetch('/api/admin/passes?type=group_events&pageSize=200&includeSummary=1', {
+        const res = await fetch('/api/admin/teams', {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (!res.ok) throw new Error('Failed to fetch teams');
@@ -226,11 +226,10 @@ export default function TeamsPage() {
                         <td className="px-4 py-3 text-sm text-zinc-300 max-w-[180px] truncate" title={team.eventName || undefined}>{team.eventName || '—'}</td>
                         <td className="px-4 py-3 text-sm tabular-nums text-zinc-400">{team.totalMembers}</td>
                         <td className="px-4 py-3">
-                          <span className={`inline-flex rounded-md px-2 py-0.5 text-xs font-medium ${
-                            team.paymentStatus === 'success'
-                              ? 'bg-emerald-500/10 text-emerald-400'
-                              : 'bg-amber-500/10 text-amber-400'
-                          }`}>
+                          <span className={`inline-flex rounded-md px-2 py-0.5 text-xs font-medium ${team.paymentStatus === 'success'
+                            ? 'bg-emerald-500/10 text-emerald-400'
+                            : 'bg-amber-500/10 text-amber-400'
+                            }`}>
                             {team.paymentStatus === 'success' ? 'Paid' : team.paymentStatus}
                           </span>
                         </td>

@@ -23,8 +23,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${inter.variable} dark`}>
-      <body className={`${inter.className} bg-[#09090b] text-white antialiased`}>
+    <html lang="en" className={`${inter.variable} dark`} suppressHydrationWarning>
+      <body className={`${inter.className} bg-[#09090b] text-white antialiased`} suppressHydrationWarning>
         <AuthProvider>
           <AdminLayout>{children}</AdminLayout>
         </AuthProvider>

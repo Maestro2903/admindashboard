@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { AdminRole } from '@/types/admin';
 import {
-  IconLayoutDashboard,
   IconSettings2,
   IconScan,
   IconTicket,
@@ -21,7 +20,6 @@ export interface SidebarNavItem {
 }
 
 const NAV_ITEMS: SidebarNavItem[] = [
-  { href: '/', label: 'Overview', icon: IconLayoutDashboard },
   { href: '/admin/operations', label: 'Operations', icon: IconSettings2 },
   { href: '/admin/live-checkin', label: 'Live Check-In', icon: IconScan },
   { href: '/admin/passes', label: 'Passes', icon: IconTicket },
@@ -48,7 +46,7 @@ export function AppSidebar({
     <aside className="fixed left-0 top-0 z-40 flex h-full w-[220px] flex-col border-r border-zinc-800 bg-[#0a0a0c]">
       {/* Brand */}
       <div className="flex h-14 items-center border-b border-zinc-800 px-5">
-        <Link href="/" className="flex items-center gap-2">
+        <Link href="/admin/operations" className="flex items-center gap-2">
           <div className="h-7 w-7 rounded-md bg-white flex items-center justify-center">
             <span className="text-xs font-bold text-zinc-900">T</span>
           </div>
@@ -60,10 +58,7 @@ export function AppSidebar({
       <nav className="flex-1 overflow-y-auto px-3 py-4">
         <div className="space-y-1">
           {visibleItems.map(({ href, label, icon: Icon }) => {
-            const isActive =
-              href === '/'
-                ? pathname === '/'
-                : pathname?.startsWith(href) ?? false;
+            const isActive = pathname?.startsWith(href) ?? false;
 
             return (
               <Link

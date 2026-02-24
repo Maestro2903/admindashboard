@@ -116,19 +116,23 @@ export async function POST(req: NextRequest) {
             headers: {
                 'x-client-id': appId,
                 'x-client-secret': secret,
-                'x-api-version': '2025-01-01',
+                'x-api-version': '2023-08-01',
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify(cfPayload)
         });
 
-        if (!response.ok) {
-            const errText = await response.text();
-            console.error('Cashfree order creation failed:', errText);
-            return Response.json({ error: 'Failed to negotiate with payment gateway' }, { status: 500 });
-        }
-
         const data = await response.json();
+
+        if (!response.ok) {
+            console.error('[ManualCreateOrder] Cashfree status:', response.status, 'Error:', data);
+            return Response.json({
+                error: 'Cashfree API Error',
+                message: data.message || 'Failed to create manual order',
+                code: data.code,
+                details: data
+            }, { status: 502 });
+        }
 
         return Response.json({
             success: true,

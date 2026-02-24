@@ -94,7 +94,12 @@ export async function POST(req: NextRequest) {
         await db.collection('onspotPayments').doc(cashfreeOrderId).set(paymentDoc);
 
         // 2. Call Cashfree API to create order and get paymentSessionId
-        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || process.env.APP_URL || process.env.NEXT_PUBLIC_MAIN_SITE_URL;
+
+        // Normalize phone: remove non-digits and take last 10
+        const rawPhone = (registrationData.phone as string) || '9999999999';
+        const cleanPhone = rawPhone.replace(/[^0-9]/g, '').slice(-10) || '9999999999';
+
         const orderPayload: any = {
             order_amount: amount,
             order_currency: 'INR',
@@ -103,14 +108,15 @@ export async function POST(req: NextRequest) {
                 customer_id: (registrationData.userId as string) || `anon_${registrationId}`,
                 customer_name: (registrationData.name as string) || 'Admin User',
                 customer_email: (registrationData.email as string) || 'noreply@takshashila.in',
-                customer_phone: (registrationData.phone as string) || '9999999999',
+                customer_phone: cleanPhone,
             },
         };
 
         // Only add notify_url if it's an absolute URL
         if (baseUrl && baseUrl.startsWith('http')) {
             orderPayload.order_meta = {
-                notify_url: `${baseUrl}/api/webhooks/cashfree`,
+                notify_url: `${baseUrl.replace(/\/$/, '')}/api/webhooks/cashfree`,
+                return_url: `${baseUrl.replace(/\/$/, '')}/admin/registrations?order_id={order_id}`
             };
         }
 
@@ -120,16 +126,21 @@ export async function POST(req: NextRequest) {
                 'Content-Type': 'application/json',
                 'x-client-id': appId,
                 'x-client-secret': secret,
-                'x-api-version': '2025-01-01',
+                'x-api-version': '2023-08-01',
             },
             body: JSON.stringify(orderPayload),
         });
 
         const cfData = await cfResponse.json();
         if (!cfResponse.ok) {
-            console.error('[CreateOrder] Cashfree error:', cfData);
+            console.error('[CreateOrder] Cashfree status:', cfResponse.status, 'Error:', cfData);
             return Response.json(
-                { error: 'Failed to create Cashfree order', details: cfData },
+                {
+                    error: 'Cashfree API Error',
+                    message: cfData.message || 'Failed to create order',
+                    code: cfData.code,
+                    details: cfData
+                },
                 { status: 502 }
             );
         }

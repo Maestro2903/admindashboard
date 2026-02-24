@@ -11,8 +11,9 @@ import {
 import type { User } from 'firebase/auth';
 import { onAuthStateChanged, getRedirectResult } from 'firebase/auth';
 import { getAuthSafe } from '@/lib/firebase/clientApp';
-import { signInWithGoogle, signOut as authSignOut } from '@/features/auth/authService';
+import { signInWithGoogle, signInWithGoogleRedirect, signOut as authSignOut } from '@/features/auth/authService';
 import type { UserProfile, UserProfileUpdate } from '@/lib/db/firestoreTypes';
+import { toast } from 'sonner';
 
 interface AuthContextValue {
   user: User | null;
@@ -105,18 +106,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [fetchUserProfile]);
 
   const signIn = useCallback(async () => {
+    console.log('[Auth] Initiating Google Sign-in...');
     try {
-      return await signInWithGoogle();
-    } catch (err) {
-      const msg =
-        err instanceof Error
-          ? err.message
-          : 'Sign-in failed. Check the console for details.';
+      const result = await signInWithGoogle();
+      console.log('[Auth] Sign-in successful:', result.user?.email);
+      return result;
+    } catch (err: any) {
+      console.error('[Auth] Sign-in error:', err);
+
+      const msg = err?.message || 'Sign-in failed.';
+
       if (typeof window !== 'undefined' && msg.includes('Firebase is not configured')) {
         alert(
           'Google sign-in is not configured. Add NEXT_PUBLIC_FIREBASE_API_KEY, NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN, and NEXT_PUBLIC_FIREBASE_PROJECT_ID to .env.local.'
         );
+      } else if (err?.code === 'auth/popup-closed-by-user' || err?.code === 'auth/popup-blocked') {
+        console.warn('[Auth] Popup blocked or closed. Attempting redirect fallback...');
+        toast.info('Popup blocked. Switching to standard redirect...');
+        return await signInWithGoogleRedirect();
       } else {
+        toast.error(`Sign-in failed: ${err.code || msg}`);
         throw err;
       }
     }

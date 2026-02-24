@@ -29,6 +29,18 @@ function formatDate(iso: unknown): string {
   }).format(d);
 }
 
+function formatDayPassDate(iso: unknown): string {
+  if (iso == null || iso === '') return '—';
+  const d = new Date(String(iso));
+  if (Number.isNaN(d.getTime())) return '—';
+  return new Intl.DateTimeFormat('en-IN', {
+    timeZone: IST,
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  }).format(d);
+}
+
 function safeStr(val: unknown): string {
   if (val == null) return '—';
   const s = String(val).trim();
@@ -41,11 +53,13 @@ export function PassTable({
   data,
   loading,
   isGroupEvents = false,
+  passType,
   onRowClick,
 }: {
   data: PassManagementRecord[];
   loading?: boolean;
   isGroupEvents?: boolean;
+  passType?: string;
   onRowClick?: (record: PassManagementRecord) => void;
 }) {
   const [expandedPassIds, setExpandedPassIds] = React.useState<Set<string>>(new Set());
@@ -61,7 +75,8 @@ export function PassTable({
   }, []);
 
   const hasTeamPayload = isGroupEvents && data.some((r) => r.team != null);
-  const colSpan = hasTeamPayload ? GROUP_EVENTS_WITH_TEAM_COLUMNS : isGroupEvents ? 14 : 11;
+  const baseColSpan = isGroupEvents ? 14 : 11;
+  const colSpan = hasTeamPayload ? GROUP_EVENTS_WITH_TEAM_COLUMNS : baseColSpan + (passType === 'day_pass' ? 1 : 0);
 
   return (
     <div className="rounded-xl border border-zinc-700 bg-zinc-900 overflow-hidden w-full">
@@ -92,6 +107,9 @@ export function PassTable({
                   <>
                     <TableHead className="px-4 py-3 text-left font-medium">Pass ID</TableHead>
                     <TableHead className="px-4 py-3 text-left font-medium">User Name</TableHead>
+                    {passType === 'day_pass' && (
+                      <TableHead className="px-4 py-3 text-left font-medium">Selected Day</TableHead>
+                    )}
                     {isGroupEvents && (
                       <>
                         <TableHead className="px-4 py-3 text-left font-medium">Team Name</TableHead>
@@ -309,6 +327,11 @@ export function PassTable({
                       <TableCell className="px-4 py-3 max-w-[10rem] truncate" title={row.userName}>
                         {safeStr(row.userName)}
                       </TableCell>
+                      {passType === 'day_pass' && (
+                        <TableCell className="px-4 py-3 whitespace-nowrap text-zinc-300">
+                          {formatDayPassDate(row.dayPassDate)}
+                        </TableCell>
+                      )}
                       {isGroupEvents && (
                         <>
                           <TableCell className="px-4 py-3 max-w-[10rem] truncate" title={row.teamName}>

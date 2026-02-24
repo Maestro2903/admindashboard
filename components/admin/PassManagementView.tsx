@@ -240,6 +240,7 @@ export function PassManagementView({
               data={filteredRecords}
               loading={loading}
               isGroupEvents={isGroupEvents}
+              passType={type}
             />
             <div className="flex items-center justify-between border-t border-zinc-800 pt-4">
               <span className="text-sm text-zinc-500">

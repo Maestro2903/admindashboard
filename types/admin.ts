@@ -298,6 +298,7 @@ export interface PassManagementRecord {
   totalMembers?: number;
   checkedInCount?: number;
   team?: GroupEventsTeam;
+  dayPassDate?: string | null;
 }
 
 export interface PassManagementResponse {

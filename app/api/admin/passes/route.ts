@@ -405,6 +405,12 @@ export async function GET(req: NextRequest) {
         getString(teamSnapshot ?? {}, 'leaderCollege') ??
         '';
 
+      // Derive selected day for day_pass
+      const selectedDay =
+        getStringArray(d, 'selectedDays')[0] ??
+        getStringArray(payment as Record<string, unknown>, 'selectedDays')[0] ??
+        null;
+
       const base: PassManagementRecord = {
         passId: doc.id,
         paymentId: paymentId || undefined,
@@ -419,6 +425,7 @@ export async function GET(req: NextRequest) {
         createdAt,
         usedAt,
         scannedBy,
+        dayPassDate: selectedDay,
       };
 
       if (type === 'group_events') {

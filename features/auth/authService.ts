@@ -33,6 +33,20 @@ export async function signInWithGoogle() {
   }
 }
 
+export async function signInWithGoogleRedirect() {
+  const realAuth = getAuthSafe();
+  if (!realAuth) {
+    throw new Error(FIREBASE_NOT_CONFIGURED);
+  }
+
+  const { signInWithRedirect } = await import('firebase/auth');
+  const provider = new GoogleAuthProvider();
+  provider.addScope('email');
+  provider.addScope('profile');
+
+  return await signInWithRedirect(realAuth, provider);
+}
+
 export async function signOut() {
   const realAuth = getAuthSafe();
   if (!realAuth) return;

@@ -40,14 +40,21 @@ export async function POST(req: NextRequest) {
 
         // Call the existing fix-stuck-payment logic to handle the verification and pass creation
         // This avoids code duplication and ensures the same logic is used for both manual fixes and automatic verification.
-        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || `http://${req.headers.get('host')}`;
-        const token = req.headers.get('Authorization')?.split(' ')[1];
+        const host = req.headers.get('host') || 'localhost:3000';
+        const protocol = host.includes('localhost') ? 'http' : 'https';
+        let baseUrl = process.env.NEXT_PUBLIC_BASE_URL || process.env.APP_URL || `${protocol}://${host}`;
+        // Enforce HTTPS in production environments to avoid 308 redirects that drop Authorization headers
+        if (baseUrl.startsWith('http://') && !baseUrl.includes('localhost')) {
+            baseUrl = baseUrl.replace('http://', 'https://');
+        }
+
+        const authHeader = req.headers.get('Authorization') || '';
 
         const verifyRes = await fetch(`${baseUrl}/api/fix-stuck-payment`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                Authorization: `Bearer ${token}`,
+                Authorization: authHeader,
             },
             body: JSON.stringify({ orderId }),
         });

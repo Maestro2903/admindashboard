@@ -122,7 +122,7 @@ export async function POST(req: NextRequest) {
             orderPayload.order_meta = {
                 // If on localhost in production, skip notify_url to avoid Cashfree rejection.
                 ...(isProduction && isLocalhost ? {} : { notify_url: `${baseUrl}/api/webhooks/cashfree` }),
-                return_url: `${isProduction && isLocalhost ? baseUrl.replace('http://', 'https://') : baseUrl}/admin/registrations?order_id={order_id}`
+                return_url: `${baseUrl}/admin/registrations?order_id={order_id}`
             };
         }
 

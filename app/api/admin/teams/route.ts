@@ -35,6 +35,7 @@ export async function GET(req: NextRequest) {
         const validTeamIds = [...new Set(teamIdsRaw.filter(Boolean))] as string[];
 
         const teamMap = new Map<string, Record<string, unknown>>();
+        const teamEventMap = new Map<string, string>(); // Maps teamId to eventName from passes
 
         // Process in batches of 10 for Firestore 'in' query limitations or just Promise.all
         if (validTeamIds.length > 0) {
@@ -51,6 +52,32 @@ export async function GET(req: NextRequest) {
             }
         }
 
+        // Map teamId to event details from the passes collection
+        passesSnap.docs.forEach(doc => {
+            const data = doc.data();
+            const teamId = getString(data, 'teamId');
+
+            let eventName = getString(data, 'eventLabel') || getString(data, 'eventName');
+
+            if (!eventName && Array.isArray(data.selectedEvents) && data.selectedEvents.length > 0) {
+                // Map array of slugs like "film-finatics" to "Film Finatics"
+                eventName = data.selectedEvents
+                    .filter((slug): slug is string => typeof slug === 'string')
+                    .map(slug => slug
+                        .replace(/[-_]+/g, ' ')
+                        .split(' ')
+                        .filter(Boolean)
+                        .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+                        .join(' ')
+                    )
+                    .join(', ');
+            }
+
+            if (teamId && eventName) {
+                teamEventMap.set(teamId, eventName);
+            }
+        });
+
         const records = [];
 
         // Attach team info mimicking the old data.records[].team structure that page.tsx expects
@@ -59,7 +86,7 @@ export async function GET(req: NextRequest) {
             const paymentStatus = getString(teamData, 'paymentStatus') ?? getString(teamData, 'status') ?? 'success';
 
             records.push({
-                eventName: getString(teamData, 'eventName') || 'Team Event',
+                eventName: teamEventMap.get(teamId) || getString(teamData, 'eventName') || 'Team Event',
                 passId: getString(teamData, 'passId') || '',
                 team: {
                     teamId: teamId,
@@ -68,6 +95,7 @@ export async function GET(req: NextRequest) {
                     leaderPhone: getString(teamData, 'leaderPhone') || '',
                     totalMembers: getNumber(teamData, 'totalMembers') ?? membersRaw.length,
                     paymentStatus: paymentStatus,
+                    isArchived: Boolean(teamData.isArchived),
                     members: membersRaw.map(m => ({
                         memberId: getString(m, 'memberId'),
                         name: getString(m, 'name') || '',

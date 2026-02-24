@@ -95,7 +95,7 @@ export async function POST(req: NextRequest) {
             registeredByAdmin: result.uid
         });
 
-        // Call Cashfree APIs to generate a checkout session
+        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_MAIN_SITE_URL || 'http://localhost:3000';
         const cfPayload = {
             order_amount: amount,
             order_currency: "INR",
@@ -104,10 +104,10 @@ export async function POST(req: NextRequest) {
                 customer_id: customerId,
                 customer_name: name,
                 customer_email: email,
-                customer_phone: phone.replace(/[^0-9]/g, '').slice(-10) // E.164 without plus or just 10 digits
+                customer_phone: phone.replace(/[^0-9]/g, '').slice(-10)
             },
             order_meta: {
-                return_url: `${process.env.NEXT_PUBLIC_MAIN_SITE_URL || 'http://localhost:3000'}/admin/registrations?order_id={order_id}`
+                return_url: `${baseUrl}/admin/registrations?order_id={order_id}`
             }
         };
 
@@ -116,7 +116,7 @@ export async function POST(req: NextRequest) {
             headers: {
                 'x-client-id': appId,
                 'x-client-secret': secret,
-                'x-api-version': '2023-08-01',
+                'x-api-version': '2025-01-01',
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify(cfPayload)

@@ -10,21 +10,23 @@ import {
   IconUsersGroup,
   IconUsers,
   IconLogout,
+  IconClipboardList,
 } from '@tabler/icons-react';
 
 export interface SidebarNavItem {
   href: string;
   label: string;
   icon: React.ComponentType<{ size?: number; className?: string }>;
-  superadminOnly?: boolean;
+  allowedRoles?: AdminRole[];
 }
 
 const NAV_ITEMS: SidebarNavItem[] = [
-  { href: '/admin/operations', label: 'Operations', icon: IconSettings2 },
-  { href: '/admin/live-checkin', label: 'Live Check-In', icon: IconScan },
-  { href: '/admin/passes', label: 'Passes', icon: IconTicket },
-  { href: '/admin/teams', label: 'Teams', icon: IconUsersGroup },
-  { href: '/admin/users', label: 'Users', icon: IconUsers },
+  { href: '/admin/operations', label: 'Operations', icon: IconSettings2, allowedRoles: ['superadmin'] },
+  { href: '/admin/live-checkin', label: 'Live Check-In', icon: IconScan, allowedRoles: ['superadmin', 'manager', 'viewer'] },
+  { href: '/admin/registrations', label: 'Registrations', icon: IconClipboardList, allowedRoles: ['superadmin', 'manager'] },
+  { href: '/admin/passes', label: 'Passes', icon: IconTicket, allowedRoles: ['superadmin', 'manager', 'viewer'] },
+  { href: '/admin/teams', label: 'Teams', icon: IconUsersGroup, allowedRoles: ['superadmin', 'manager', 'viewer'] },
+  { href: '/admin/users', label: 'Users', icon: IconUsers, allowedRoles: ['superadmin'] },
 ];
 
 const MAIN_SITE_URL = process.env.NEXT_PUBLIC_MAIN_SITE_URL || 'https://takshashila26.in';
@@ -39,7 +41,7 @@ export function AppSidebar({
   const pathname = usePathname();
 
   const visibleItems = NAV_ITEMS.filter(
-    (item) => !item.superadminOnly || adminRole === 'superadmin'
+    (item) => !item.allowedRoles || item.allowedRoles.includes(adminRole as AdminRole)
   );
 
   return (
@@ -64,11 +66,10 @@ export function AppSidebar({
               <Link
                 key={href}
                 href={href}
-                className={`group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150 ${
-                  isActive
+                className={`group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150 ${isActive
                     ? 'bg-zinc-800 text-white'
                     : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200'
-                }`}
+                  }`}
               >
                 <Icon size={18} className={isActive ? 'text-white' : 'text-zinc-500 group-hover:text-zinc-300'} />
                 {label}

@@ -8,10 +8,11 @@
     "start": "next start -p 3001",
     "lint": "eslint .",
     "admin:backfill-dashboard": "node scripts/admin/backfill-admin-dashboard.js",
-"admin:set-superadmin": "node scripts/admin/set-superadmin.js",
+    "admin:set-superadmin": "node scripts/admin/set-superadmin.js",
     "vercel:env-push": "node scripts/sync-env-to-vercel.js"
   },
   "dependencies": {
+    "@cashfreepayments/cashfree-js": "^1.0.6",
     "@tabler/icons-react": "^3.36.1",
     "@tanstack/react-table": "^8.21.3",
     "@upstash/ratelimit": "^2.0.8",

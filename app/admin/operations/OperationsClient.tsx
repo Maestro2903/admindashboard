@@ -97,11 +97,10 @@ const TableRow = React.memo(function TableRow({
     <tr
       role="button"
       tabIndex={0}
-      className={`cursor-pointer select-none transition-colors ${
-        isSelected
+      className={`cursor-pointer select-none transition-colors ${isSelected
           ? 'bg-zinc-700/50 border-l-2 border-l-emerald-500'
           : 'border-l-2 border-l-transparent hover:bg-zinc-800/50'
-      }`}
+        }`}
       onClick={() => onOpenDetail(r)}
       onKeyDown={handleKeyDown}
     >
@@ -138,7 +137,7 @@ const TableRow = React.memo(function TableRow({
 });
 
 function OperationsClientInner() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, userData, loading: authLoading } = useAuth();
   const searchParams = useSearchParams();
 
   const [events, setEvents] = React.useState<AdminEvent[]>([]);
@@ -146,6 +145,37 @@ function OperationsClientInner() {
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [showFilters, setShowFilters] = React.useState(false);
+
+  // Role Assignment State
+  const [assignEmail, setAssignEmail] = React.useState('');
+  const [assignRole, setAssignRole] = React.useState<'viewer' | 'manager' | 'superadmin'>('viewer');
+  const [assigning, setAssigning] = React.useState(false);
+  const [assignMessage, setAssignMessage] = React.useState<{ type: 'success' | 'error', text: string } | null>(null);
+
+  const handleAssignRole = async () => {
+    if (!user || !assignEmail.trim()) return;
+    try {
+      setAssigning(true);
+      setAssignMessage(null);
+      const token = await user.getIdToken(false);
+      const res = await fetch('/api/admin/assign-role', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ email: assignEmail.trim(), role: assignRole })
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to assign role');
+      setAssignMessage({ type: 'success', text: `Successfully updated ${assignEmail} to ${assignRole}` });
+      setAssignEmail('');
+    } catch (e: any) {
+      setAssignMessage({ type: 'error', text: e.message });
+    } finally {
+      setAssigning(false);
+    }
+  };
 
   const [search, setSearch] = React.useState(searchParams.get('q') ?? '');
   const [passType, setPassType] = React.useState(searchParams.get('passType') ?? 'all');
@@ -319,6 +349,47 @@ function OperationsClientInner() {
           </Button>
         </div>
       </div>
+
+      {/* SuperAdmin Role Assignment */}
+      {userData?.adminRole === 'superadmin' && (
+        <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4 space-y-3 fade-in mt-4 mb-4">
+          <div>
+            <h3 className="text-sm font-semibold text-white">SuperAdmin Role Assignment</h3>
+            <p className="text-xs text-zinc-400 mt-1">Quickly assign administrative privileges to a registered user.</p>
+          </div>
+          <div className="flex flex-col sm:flex-row items-center gap-3">
+            <Input
+              type="email"
+              placeholder="User Email Address"
+              value={assignEmail}
+              onChange={(e) => setAssignEmail(e.target.value)}
+              className="bg-zinc-900 border-zinc-700 text-white placeholder:text-zinc-600 focus-visible:ring-blue-500 sm:max-w-[300px]"
+            />
+            <Select value={assignRole} onValueChange={(val: any) => setAssignRole(val)}>
+              <SelectTrigger className="w-[180px] bg-zinc-900 border-zinc-700 text-zinc-300 focus:ring-blue-500">
+                <SelectValue placeholder="Select Role" />
+              </SelectTrigger>
+              <SelectContent className="bg-zinc-800 border-zinc-700 text-zinc-300">
+                <SelectItem value="viewer">Viewer</SelectItem>
+                <SelectItem value="manager">Editor (Manager)</SelectItem>
+                <SelectItem value="superadmin">SuperAdmin</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button
+              onClick={handleAssignRole}
+              disabled={assigning || !assignEmail.trim()}
+              className="bg-blue-600 text-white hover:bg-blue-700 w-full sm:w-auto"
+            >
+              {assigning ? 'Assigning...' : 'Assign Role'}
+            </Button>
+          </div>
+          {assignMessage && (
+            <div className={`text-xs mt-2 ${assignMessage.type === 'success' ? 'text-emerald-400' : 'text-red-400'}`}>
+              {assignMessage.text}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Search + Filters */}
       <div className="space-y-3">

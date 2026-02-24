@@ -16,7 +16,7 @@ In [Firebase Console](https://console.firebase.google.com) → your **new** proj
 | `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` | `storageBucket` |
 | `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | `messagingSenderId` |
 | `NEXT_PUBLIC_FIREBASE_APP_ID` | `appId` |
-| `NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID` | `measurementId` (optional, for Analytics) |
+| `NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID` | `measurementId` (optional). Use the value from Firebase Console or leave unset to avoid "measurement ID does not match" warnings. |
 
 ## 2. Admin SDK (server / API routes)
 

@@ -10,8 +10,7 @@ import {
 } from 'react';
 import type { User } from 'firebase/auth';
 import { onAuthStateChanged, getRedirectResult } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
-import { db, getAuthSafe } from '@/lib/firebase/clientApp';
+import { getAuthSafe } from '@/lib/firebase/clientApp';
 import { signInWithGoogle, signOut as authSignOut } from '@/features/auth/authService';
 import type { UserProfile, UserProfileUpdate } from '@/lib/db/firestoreTypes';
 
@@ -33,12 +32,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const fetchUserProfile = useCallback(async (u: User) => {
     try {
-      const userDoc = await getDoc(doc(db, 'users', u.uid));
-      if (userDoc.exists()) {
-        setUserData(userDoc.data() as UserProfile);
-      } else {
-        setUserData(null);
+      let idToken = await u.getIdToken(false);
+      let res = await fetch('/api/me', {
+        headers: { Authorization: `Bearer ${idToken}` },
+      });
+      if (res.status === 401) {
+        idToken = await u.getIdToken(true);
+        res = await fetch('/api/me', { headers: { Authorization: `Bearer ${idToken}` } });
       }
+      if (!res.ok) {
+        setUserData(null);
+        return;
+      }
+      const data = await res.json();
+      setUserData({
+        uid: data.uid ?? u.uid,
+        name: data.name ?? '',
+        email: data.email ?? null,
+        college: '',
+        phone: '',
+        isOrganizer: data.isOrganizer ?? false,
+        adminRole: data.adminRole ?? undefined,
+      } as UserProfile);
     } catch (err) {
       console.error('Error fetching user profile:', err);
       setUserData(null);

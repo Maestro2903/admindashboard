@@ -8,6 +8,8 @@ const sanitizeEnv = (value: string | undefined): string | undefined => {
   return value?.trim().replace(/\n/g, '').replace(/\r/g, '') || undefined;
 };
 
+// Only include measurementId when set; omit it to use the server value and avoid mismatch warnings
+const _measurementId = sanitizeEnv(process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID);
 const firebaseConfig = {
   apiKey: sanitizeEnv(process.env.NEXT_PUBLIC_FIREBASE_API_KEY),
   authDomain: sanitizeEnv(process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN),
@@ -15,7 +17,7 @@ const firebaseConfig = {
   storageBucket: sanitizeEnv(process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET),
   messagingSenderId: sanitizeEnv(process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID),
   appId: sanitizeEnv(process.env.NEXT_PUBLIC_FIREBASE_APP_ID),
-  measurementId: sanitizeEnv(process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID),
+  ...(_measurementId ? { measurementId: _measurementId } : {}),
 };
 
 function getFirebaseApp(): FirebaseApp | null {

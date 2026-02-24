@@ -15,7 +15,6 @@ import {
 import { IconCreditCard, IconUserPlus, IconArrowLeft } from '@tabler/icons-react';
 import { toast } from 'sonner';
 import Link from 'next/link';
-// @ts-expect-error No type definitions available for the Cashfree JS SDK
 import { load } from '@cashfreepayments/cashfree-js';
 
 let cashfree: any;

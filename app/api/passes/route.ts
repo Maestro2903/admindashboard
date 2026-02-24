@@ -9,6 +9,12 @@ function toIso(val: unknown): string | null {
   return null;
 }
 
+function clampPageSize(raw: string | null, fallback: number, min: number, max: number): number {
+  const n = raw ? parseInt(raw, 10) : NaN;
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(Math.max(n, min), max);
+}
+
 export async function GET(req: NextRequest) {
   try {
     const result = await requireOrganizer(req);
@@ -16,15 +22,26 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const includeArchived = searchParams.get('includeArchived') === '1';
+    const cursor = searchParams.get('cursor');
+    const pageSize = clampPageSize(searchParams.get('pageSize'), 50, 10, 200);
 
     const db = getAdminFirestore();
-    let snapshot;
-    try {
-      snapshot = await db.collection('passes').orderBy('createdAt', 'desc').get();
-    } catch (error) {
-      console.warn('Could not order passes by createdAt, fetching without order:', error);
-      snapshot = await db.collection('passes').get();
+
+    // STEP 2: Firestore-native pagination with orderBy + limit + startAfter
+    let query = db.collection('passes').orderBy('createdAt', 'desc').limit(pageSize);
+
+    if (cursor) {
+      try {
+        const cursorDoc = await db.collection('passes').doc(cursor).get();
+        if (cursorDoc.exists) {
+          query = query.startAfter(cursorDoc);
+        }
+      } catch (err) {
+        console.warn('Failed to apply passes cursor:', err);
+      }
     }
+
+    const snapshot = await query.get();
 
     let docs = snapshot.docs;
     if (!includeArchived) {
@@ -39,6 +56,7 @@ export async function GET(req: NextRequest) {
         passType: data.passType || null,
         amount: Number(data.amount) || 0,
         status: data.status || null,
+        // STEP 4: paymentId MUST reference payments document ID (not cashfreeOrderId)
         paymentId: data.paymentId || null,
         usedAt: toIso(data.usedAt) || null,
         scannedBy: data.scannedBy || null,
@@ -48,7 +66,10 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    return Response.json({ passes, count: passes.length });
+    const lastDoc = docs[docs.length - 1];
+    const nextCursor = docs.length === pageSize && lastDoc ? lastDoc.id : null;
+
+    return Response.json({ passes, count: passes.length, nextCursor });
   } catch (error) {
     console.error('Admin passes API error:', error);
     return Response.json(

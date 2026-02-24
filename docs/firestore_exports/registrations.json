@@ -1,0 +1,19 @@
+{
+  "_init_": {
+    "_dummy": true,
+    "note": "Initial collection creation",
+    "createdAt": {
+      "_seconds": 1770215579,
+      "_nanoseconds": 988000000
+    }
+  },
+  "test-reg-001": {
+    "uid": "test-user-001",
+    "eventId": "test-solo-singing",
+    "passId": "test-pass-001",
+    "registeredAt": {
+      "_seconds": 1771693884,
+      "_nanoseconds": 617000000
+    }
+  }
+}

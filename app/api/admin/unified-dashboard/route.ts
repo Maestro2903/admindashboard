@@ -44,9 +44,11 @@ function deriveEventName(
 ): string {
   const pt = passType.toLowerCase();
   if (pt === 'group_events') {
+    // Prefer concrete event names derived from event IDs; fall back to team name only if missing.
+    if (eventNames.length > 0) return eventNames.join(', ');
     const teamName = getString(teamSnapshot ?? {}, 'teamName');
     if (teamName) return teamName;
-    return eventNames[0] ?? '—';
+    return '—';
   }
   if (pt === 'day_pass') {
     const selectedDay = getString(d, 'selectedDay');

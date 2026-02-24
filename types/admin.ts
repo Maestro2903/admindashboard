@@ -1,10 +1,13 @@
-export type PaymentStatus = 'pending' | 'success' | 'failed';
+/** CANONICAL payment status - only 'success' is financially valid */
+export type PaymentStatus = 'success' | 'pending' | 'failed';
+
+/** CANONICAL pass status */
 export type PassStatus = 'paid' | 'used';
 
-/** Admin role for organizer users. Default (if missing) is manager. */
+/** Admin role for organizer users. Default (if missing/invalid) is 'viewer'. */
 export type AdminRole = 'viewer' | 'manager' | 'superadmin';
 
-/** Pass types from Firestore */
+/** Pass types from Firestore - closed set */
 export type PassType = 'day_pass' | 'group_events' | 'proshow' | 'sana_concert';
 
 // ─── Clean AdminRecord (unified server transformer output) ──────────────────
@@ -33,14 +36,17 @@ export interface AdminRecord {
   isArchived?: boolean;
 }
 
-/** Expandable row team member detail */
+/** Expandable row team member detail - CANONICAL attendance structure */
 export interface TeamMemberDetail {
   memberId?: string;
   name: string;
   phone: string;
   isLeader: boolean;
+  /** MUST read from attendance.checkedIn, NOT top-level checkedIn */
   checkedIn: boolean;
+  /** MUST read from attendance.checkInTime */
   checkedInAt?: string;
+  /** MUST read from attendance.checkedInBy */
   checkedInBy?: string;
 }
 
@@ -254,8 +260,11 @@ export interface GroupEventsMember {
   phone: string;
   email: string | null;
   isLeader: boolean;
+  /** MUST read from attendance.checkedIn */
   checkedIn: boolean;
+  /** MUST read from attendance.checkInTime */
   checkInTime: string | null;
+  /** MUST read from attendance.checkedInBy */
   checkedInBy: string | null;
 }
 
@@ -277,6 +286,8 @@ export interface PassManagementRecord {
   college: string;
   phone: string;
   eventName: string;
+  /** Full list of event names for this pass (if multi-event) */
+  eventNames?: string[];
   amount: number;
   paymentStatus: 'success';
   passStatus: PassStatus;

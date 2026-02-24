@@ -597,8 +597,17 @@ export default function PassExplorerPage() {
                           {PASS_TYPE_LABELS[r.passId] ?? r.passId.includes('day') ? 'Day Pass' : r.teamName ? 'Group' : 'Pass'}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-sm text-zinc-300 max-w-[180px] truncate" title={r.eventName || undefined}>
-                        {r.eventName || '—'}
+                      <td
+                        className="px-4 py-3 text-sm text-zinc-300 max-w-[180px] truncate"
+                        title={
+                          r.eventNames && r.eventNames.length > 1
+                            ? r.eventNames.join(', ')
+                            : r.eventName || undefined
+                        }
+                      >
+                        {r.eventNames && r.eventNames.length > 1
+                          ? `Multi-event (${r.eventNames.length})`
+                          : r.eventName || '—'}
                       </td>
                       <td className="px-4 py-3 text-sm tabular-nums text-zinc-300">₹{r.amount}</td>
                       <td className="px-4 py-3">

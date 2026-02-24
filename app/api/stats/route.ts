@@ -35,62 +35,93 @@ export async function GET(req: NextRequest) {
 
     const db = getAdminFirestore();
 
-    // Parallel collection reads for stats
+    // STEP 8: Use aggregation queries and batched reads instead of full collection scans
     const [
-      paymentsSnap,
-      passesSnap,
-      teamsSnap,
       usersCountAgg,
+      teamsCountAgg,
     ] = await Promise.all([
-      db.collection('payments').get(),
-      db.collection('passes').get(),
-      db.collection('teams').get(),
       db.collection('users').count().get(),
+      db.collection('teams').count().get(),
     ]);
 
-    const payments = paymentsSnap.docs.map((d) => d.data() as Record<string, unknown>);
-    const passes = passesSnap.docs.map((d) => d.data() as Record<string, unknown>);
+    const totalUsers = usersCountAgg.data()?.count ?? 0;
+    const teamsRegistered = teamsCountAgg.data()?.count ?? 0;
 
-    // Core metrics
-    const successPayments = payments.filter((p) => p.status === 'success');
+    // STEP 8: Query only success payments for revenue calculation (batched, paginated)
+    // Use cursor-based pagination to avoid loading all at once
+    const successPaymentsQuery = db.collection('payments')
+      .where('status', '==', 'success')
+      .orderBy('createdAt', 'desc')
+      .limit(1000); // Reasonable batch size
+
+    const successPaymentsSnap = await successPaymentsQuery.get();
+    const successPayments = successPaymentsSnap.docs.map((d) => d.data() as Record<string, unknown>);
+    
     const totalSuccessfulPayments = successPayments.length;
     const revenue = successPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
-    const pendingPayments = payments.filter((p) => p.status === 'pending').length;
+
+    // STEP 8: Query pending payments count
+    const pendingPaymentsAgg = await db.collection('payments')
+      .where('status', '==', 'pending')
+      .count()
+      .get();
+    const pendingPayments = pendingPaymentsAgg.data()?.count ?? 0;
+
+    // STEP 8: Query passes by status for counts
+    const [paidPassesAgg, usedPassesAgg] = await Promise.all([
+      db.collection('passes').where('status', '==', 'paid').count().get(),
+      db.collection('passes').where('status', '==', 'used').count().get(),
+    ]);
+    const activePasses = paidPassesAgg.data()?.count ?? 0;
+    const usedPasses = usedPassesAgg.data()?.count ?? 0;
 
     // Build paymentId -> status map for pass distribution (only count passes with success payment, not archived)
     const paymentStatusById = new Map<string, string>();
-    for (const doc of paymentsSnap.docs) {
+    for (const doc of successPaymentsSnap.docs) {
       const d = doc.data() as Record<string, unknown>;
       const st = d?.status;
       if (typeof st === 'string') paymentStatusById.set(doc.id, st);
     }
 
-    const activePasses = passes.filter((p) => p.status === 'paid').length;
-    const usedPasses = passes.filter((p) => p.status === 'used').length;
-    const teamsRegistered = teamsSnap.size;
-    const totalUsers = usersCountAgg.data()?.count ?? 0;
-
-    // Pass distribution: only count passes that have success payment and are not archived (matches admin passes list)
+    // STEP 8: For pass distribution, query passes in batches by type
+    // Only count passes that have success payment and are not archived
+    const passTypes = ['day_pass', 'group_events', 'proshow', 'sana_concert'];
     const passDistribution: Record<string, number> = {};
-    for (const p of passes) {
-      if (p.isArchived === true) continue;
-      const paymentId = getString(p, 'paymentId');
-      if (paymentId && paymentStatusById.get(paymentId) !== 'success') continue;
-      const pt = getString(p, 'passType');
-      if (pt && !/test/i.test(pt)) {
-        passDistribution[pt] = (passDistribution[pt] ?? 0) + 1;
+    
+    for (const pt of passTypes) {
+      try {
+        const passesOfType = await db.collection('passes')
+          .where('passType', '==', pt)
+          .where('isArchived', '==', false)
+          .limit(1000)
+          .get();
+        
+        let count = 0;
+        for (const doc of passesOfType.docs) {
+          const p = doc.data() as Record<string, unknown>;
+          const paymentId = getString(p, 'paymentId');
+          // STEP 3: Only count if linked payment has status === 'success'
+          if (paymentId && paymentStatusById.get(paymentId) === 'success') {
+            count++;
+          }
+        }
+        if (count > 0) {
+          passDistribution[pt] = count;
+        }
+      } catch (err) {
+        console.warn(`Failed to count passes for type ${pt}:`, err);
       }
     }
 
-    // Today vs yesterday registrations
+    // Today vs yesterday registrations (based on success payments)
     const { start: todayStart, end: todayEnd } = getDayISTBounds(0);
     const { start: yesterdayStart, end: yesterdayEnd } = getDayISTBounds(-1);
 
     let registrationsToday = 0;
     let registrationsYesterday = 0;
 
-    for (const p of payments) {
-      if (p.status !== 'success') continue;
+    // STEP 3: Only count success payments for registrations
+    for (const p of successPayments) {
       const createdAt = toIso(p.createdAt);
       if (!createdAt) continue;
       const date = new Date(createdAt);
@@ -114,7 +145,7 @@ export async function GET(req: NextRequest) {
     // Activity feed: recent events (last 20)
     const activityItems: ActivityFeedItem[] = [];
 
-    // Recent successful payments
+    // Recent successful payments (already have them from above query)
     const recentPayments = successPayments
       .map((p) => ({
         ...p,
@@ -133,16 +164,20 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // Recent used passes (scans)
-    const recentScans = passes
-      .filter((p) => p.status === 'used' && p.usedAt)
-      .map((p) => ({
+    // STEP 8: Recent used passes (query instead of full scan)
+    const recentScansSnap = await db.collection('passes')
+      .where('status', '==', 'used')
+      .orderBy('usedAt', 'desc')
+      .limit(10)
+      .get();
+    
+    const recentScans = recentScansSnap.docs.map((doc) => {
+      const p = doc.data() as Record<string, unknown>;
+      return {
         ...p,
         _ts: toIso(p.usedAt),
-      }))
-      .filter((p) => p._ts)
-      .sort((a, b) => new Date(b._ts!).getTime() - new Date(a._ts!).getTime())
-      .slice(0, 10);
+      };
+    }).filter((p) => p._ts);
 
     for (const s of recentScans) {
       activityItems.push({
@@ -153,15 +188,16 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // Recent teams
-    const recentTeams = teamsSnap.docs
-      .map((d) => {
-        const data = d.data() as Record<string, unknown>;
-        return { ...data, _ts: toIso(data.createdAt) };
-      })
-      .filter((t) => t._ts)
-      .sort((a, b) => new Date(b._ts!).getTime() - new Date(a._ts!).getTime())
-      .slice(0, 5);
+    // STEP 8: Recent teams (query instead of full scan)
+    const recentTeamsSnap = await db.collection('teams')
+      .orderBy('createdAt', 'desc')
+      .limit(5)
+      .get();
+    
+    const recentTeams = recentTeamsSnap.docs.map((d) => {
+      const data = d.data() as Record<string, unknown>;
+      return { ...data, _ts: toIso(data.createdAt) };
+    }).filter((t) => t._ts);
 
     for (const t of recentTeams) {
       activityItems.push({

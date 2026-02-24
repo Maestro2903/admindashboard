@@ -11,14 +11,14 @@ function parseRole(value: unknown): AdminRole {
   if (typeof value === 'string' && VALID_ROLES.includes(value as AdminRole)) {
     return value as AdminRole;
   }
-  // Default to manager so organizers can mutate passes/teams without explicit role in Firestore.
-  // Set adminRole to 'viewer' on users/{uid} to restrict to read-only.
-  return 'manager';
+  // SECURITY: Missing or invalid role defaults to 'viewer' (read-only).
+  // Only explicit 'manager' or 'superadmin' in Firestore grants mutation capabilities.
+  return 'viewer';
 }
 
 /**
  * Requires organizer and resolves adminRole from users/{uid}.adminRole.
- * Default role is 'viewer' if missing. Use for mutation routes that need role checks.
+ * Default role is 'viewer' if missing/invalid. Use for mutation routes that need role checks.
  */
 export async function requireAdminRole(
   req: NextRequest

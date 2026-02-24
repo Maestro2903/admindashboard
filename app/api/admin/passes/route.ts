@@ -63,9 +63,11 @@ function deriveEventName(
 ): string {
   const pt = passType.toLowerCase();
   if (pt === 'group_events') {
+    // Prefer concrete event names derived from event IDs; fall back to team name only if missing.
+    if (eventNames.length > 0) return eventNames.join(', ');
     const teamName = getString(teamSnapshot ?? {}, 'teamName');
     if (teamName) return teamName;
-    return eventNames[0] ?? '—';
+    return '—';
   }
   if (pt === 'day_pass') {
     const selectedDay = getString(d, 'selectedDay');
@@ -312,6 +314,25 @@ export async function GET(req: NextRequest) {
 
       const userId = getString(d, 'userId') ?? '';
       const user = usersById.get(userId) ?? {};
+      const paymentCustomer = asRecord((payment as Record<string, unknown>).customerDetails);
+
+      const userName =
+        getString(user, 'name') ??
+        getString(payment as Record<string, unknown>, 'name') ??
+        (paymentCustomer
+          ? getString(paymentCustomer, 'customer_name') ?? getString(paymentCustomer, 'name')
+          : undefined) ??
+        '';
+      const userPhone =
+        getString(user, 'phone') ??
+        getString(payment as Record<string, unknown>, 'phone') ??
+        (paymentCustomer
+          ? getString(paymentCustomer, 'customer_phone') ?? getString(paymentCustomer, 'phone')
+          : undefined) ??
+        '';
+      const userCollege =
+        getString(user, 'college') ?? getString(payment as Record<string, unknown>, 'college') ?? '';
+
       const amount = Number((payment as Record<string, unknown>).amount) || 0;
       const createdAt = toIso(d.createdAt) ?? '';
       const usedAt = toIso(d.usedAt);
@@ -320,7 +341,11 @@ export async function GET(req: NextRequest) {
       const scannedBy = getString(d, 'scannedBy') ?? null;
 
       // Derive event name
-      const selectedEvents = getStringArray(d, 'selectedEvents');
+      let selectedEvents = getStringArray(d, 'selectedEvents');
+      // Fallback: some older passes store selectedEvents only on the payment record
+      if (selectedEvents.length === 0 && payment) {
+        selectedEvents = getStringArray(payment as Record<string, unknown>, 'selectedEvents');
+      }
       const singleEventId = getString(d, 'eventId') ?? getString(d, 'selectedEvent');
       const eventIdsForPass = singleEventId && !selectedEvents.includes(singleEventId)
         ? [...selectedEvents, singleEventId]
@@ -330,14 +355,14 @@ export async function GET(req: NextRequest) {
         .filter(Boolean);
       const teamSnapshot = asRecord(d.teamSnapshot);
       const eventName = deriveEventName(type, d, teamSnapshot, eventNames);
-
       const base: PassManagementRecord = {
         passId: doc.id,
         paymentId: paymentId || undefined,
-        userName: getString(user, 'name') ?? '',
-        college: getString(user, 'college') ?? '',
-        phone: getString(user, 'phone') ?? '',
+        userName,
+        college: userCollege,
+        phone: userPhone,
         eventName,
+        eventNames: eventNames.length > 0 ? eventNames : undefined,
         amount,
         paymentStatus: 'success',
         passStatus,
@@ -356,8 +381,12 @@ export async function GET(req: NextRequest) {
           base.checkedInCount = countCheckedIn(members);
           base.teamName = getString(t, 'teamName') ?? '';
           const teamPayload = buildGroupEventsTeam(teamId ?? '', t, paymentStatus);
-          teamPayload.leaderCollege = getString(user, 'college') ?? '';
+          teamPayload.leaderCollege = userCollege || getString(user, 'college') || '';
           base.team = teamPayload;
+          // If user info is missing (e.g. user document deleted), fall back to team leader details
+          if (!base.userName && teamPayload.leaderName) base.userName = teamPayload.leaderName;
+          if (!base.phone && teamPayload.leaderPhone) base.phone = teamPayload.leaderPhone;
+          if (!base.college && teamPayload.leaderCollege) base.college = teamPayload.leaderCollege;
         } else {
           const teamSnapshot = d.teamSnapshot as Record<string, unknown> | undefined;
           if (teamSnapshot) {
@@ -369,7 +398,11 @@ export async function GET(req: NextRequest) {
               teamSnapshot,
               paymentStatus
             );
-            base.team.leaderCollege = getString(user, 'college') ?? '';
+            base.team.leaderCollege = userCollege || getString(user, 'college') || '';
+            // Fallback to leader details from snapshot when user info is missing
+            if (!base.userName && base.team.leaderName) base.userName = base.team.leaderName;
+            if (!base.phone && base.team.leaderPhone) base.phone = base.team.leaderPhone;
+            if (!base.college && base.team.leaderCollege) base.college = base.team.leaderCollege;
           }
         }
       }

@@ -11,6 +11,12 @@ function toIso(val: unknown): string | null {
   return null;
 }
 
+function clampPageSize(raw: string | null, fallback: number, min: number, max: number): number {
+  const n = raw ? parseInt(raw, 10) : NaN;
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(Math.max(n, min), max);
+}
+
 export async function GET(req: NextRequest) {
   const rl = await rateLimitAdmin(req, 'dashboard');
   if (rl.limited) return rateLimitResponse(rl);
@@ -24,16 +30,29 @@ export async function GET(req: NextRequest) {
     const eventId = searchParams.get('eventId')?.trim() || null;
     const eventCategory = searchParams.get('eventCategory')?.trim() || null;
     const eventType = searchParams.get('eventType')?.trim() || null;
+    const cursor = searchParams.get('cursor');
+    const pageSize = clampPageSize(searchParams.get('pageSize'), 50, 10, 200);
 
     const db = getAdminFirestore();
-    let snapshot;
-    try {
-      snapshot = await db.collection('payments').orderBy('createdAt', 'desc').get();
-    } catch (error) {
-      console.warn('Could not order payments by createdAt, fetching without order:', error);
-      snapshot = await db.collection('payments').get();
+
+    // STEP 2: Firestore-native pagination with orderBy + limit + startAfter
+    // STEP 3: payments.status === 'success' is the ONLY source of truth for financial validity
+    let query = db.collection('payments').orderBy('createdAt', 'desc').limit(pageSize);
+
+    if (cursor) {
+      try {
+        const cursorDoc = await db.collection('payments').doc(cursor).get();
+        if (cursorDoc.exists) {
+          query = query.startAfter(cursorDoc);
+        }
+      } catch (err) {
+        console.warn('Failed to apply payments cursor:', err);
+      }
     }
 
+    const snapshot = await query.get();
+
+    // Filter in-memory (Firestore doesn't support != efficiently)
     let docs = snapshot.docs;
     if (!includeArchived) {
       docs = docs.filter((doc) => (doc.data() as Record<string, unknown>).isArchived !== true);
@@ -74,13 +93,15 @@ export async function GET(req: NextRequest) {
       const data = doc.data() as Record<string, unknown>;
       const uid = (data.userId as string) || null;
       const user = uid ? usersById.get(uid) : null;
+      // STEP 3: Only payments.status defines validity - ignore any payment.success boolean
+      const status = (data.status as string) || 'pending';
       return {
         id: doc.id,
         userId: uid,
         name: user?.name ?? '—',
         email: user?.email ?? '—',
         amount: Number(data.amount) || 0,
-        status: data.status || 'pending',
+        status, // CANONICAL: 'success' | 'pending' | 'failed'
         passType: data.passType || null,
         cashfreeOrderId: data.cashfreeOrderId || null,
         createdAt: toIso(data.createdAt) || null,
@@ -89,7 +110,10 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    return Response.json({ payments, count: payments.length });
+    const lastDoc = docs[docs.length - 1];
+    const nextCursor = docs.length === pageSize && lastDoc ? lastDoc.id : null;
+
+    return Response.json({ payments, count: payments.length, nextCursor });
   } catch (error) {
     console.error('Admin payments API error:', error);
     return Response.json(

@@ -1,0 +1,351 @@
+{
+  "10jJBQD6tz9rXk1mbiW7": {
+    "passId": "OobdXhi6T3pPKwvnxjYj",
+    "memberId": null,
+    "scannerId": "device-id-placeholder",
+    "status": "valid",
+    "eventId": "deadlock",
+    "eventName": "DEADLOCK",
+    "scannedAt": {
+      "_seconds": 1771905320,
+      "_nanoseconds": 281000000
+    }
+  },
+  "2Q2M8LPewFbSrLoV2Jqo": {
+    "passId": "OobdXhi6T3pPKwvnxjYj",
+    "memberId": null,
+    "scannerId": "device-id-placeholder",
+    "status": "valid",
+    "eventId": "crack-the-code",
+    "eventName": "CRACK THE CODE",
+    "scannedAt": {
+      "_seconds": 1771905320,
+      "_nanoseconds": 303000000
+    }
+  },
+  "2dWvriEM3fliwdhnh05p": {
+    "passId": "iNj7jLcKW4eqV6G92UQY",
+    "memberId": null,
+    "scannerId": "device-id-placeholder",
+    "status": "valid",
+    "eventId": "choreo-showcase",
+    "eventName": "CHOREO SHOWCASE",
+    "scannedAt": {
+      "_seconds": 1771514031,
+      "_nanoseconds": 417000000
+    }
+  },
+  "30REtkyuiCgVNvDavFnQ": {
+    "passId": "OobdXhi6T3pPKwvnxjYj",
+    "memberId": null,
+    "scannerId": "device-id-placeholder",
+    "status": "valid",
+    "eventId": "model-mastery",
+    "eventName": "Model Mastery",
+    "scannedAt": {
+      "_seconds": 1771905321,
+      "_nanoseconds": 370000000
+    }
+  },
+  "3opoED0tlmsXqrf0OODa": {
+    "passId": "iNj7jLcKW4eqV6G92UQY",
+    "memberId": null,
+    "scannerId": "device-id-placeholder",
+    "status": "valid",
+    "eventId": "designers-onboard",
+    "eventName": "DESIGNERS ONBOARD",
+    "scannedAt": {
+      "_seconds": 1771515498,
+      "_nanoseconds": 834000000
+    }
+  },
+  "3ykEpMahWVgYwkqo5GJh": {
+    "passId": "iNj7jLcKW4eqV6G92UQY",
+    "memberId": null,
+    "scannerId": "device-id-placeholder",
+    "status": "valid",
+    "eventId": "chain-of-lies",
+    "eventName": "CHAIN OF LIES",
+    "scannedAt": {
+      "_seconds": 1771515497,
+      "_nanoseconds": 497000000
+    }
+  },
+  "4TRuLTANswzwNPmuwSqg": {
+    "passId": "iNj7jLcKW4eqV6G92UQY",
+    "memberId": null,
+    "scannerId": "device-id-placeholder",
+    "status": "valid",
+    "eventId": "gate",
+    "eventName": "Gate Entry",
+    "scannedAt": {
+      "_seconds": 1771511728,
+      "_nanoseconds": 635000000
+    }
+  },
+  "4fn7mDLukcwb6wHC39TG": {
+    "passId": "iNj7jLcKW4eqV6G92UQY",
+    "memberId": null,
+    "scannerId": "device-id-placeholder",
+    "status": "valid",
+    "eventId": "mock-global-summit",
+    "eventName": "MOCK GLOBAL SUMMIT: VENEZUELA–GREENLAND CRISIS",
+    "scannedAt": {
+      "_seconds": 1771514036,
+      "_nanoseconds": 6000000
+    }
+  },
+  "5hicaHXaSaqE0mObatDb": {
+    "passId": "MfB5hfwom8L3mfv41wZj",
+    "scannerId": "device-id-placeholder",
+    "status": "valid",
+    "scannedAt": {
+      "_seconds": 1770461199,
+      "_nanoseconds": 78000000
+    }
+  },
+  "5kojfgeYOwGVMYorPwej": {
+    "passId": "iNj7jLcKW4eqV6G92UQY",
+    "memberId": null,
+    "scannerId": "device-id-placeholder",
+    "status": "valid",
+    "eventId": "borderland-protocol",
+    "eventName": "BORDERLAND PROTOCOL",
+    "scannedAt": {
+      "_seconds": 1771515497,
+      "_nanoseconds": 150000000
+    }
+  },
+  "6sQYyuOKmbSRJfeHHJOd": {
+    "passId": "iNj7jLcKW4eqV6G92UQY",
+    "memberId": null,
+    "scannerId": "device-id-placeholder",
+    "status": "valid",
+    "scannedAt": {
+      "_seconds": 1771429492,
+      "_nanoseconds": 737000000
+    }
+  },
+  "7G662JyyxeufY1TcmInJ": {
+    "passId": "iNj7jLcKW4eqV6G92UQY",
+    "memberId": null,
+    "scannerId": "device-id-placeholder",
+    "status": "valid",
+    "eventId": "astrotrack",
+    "eventName": "ASTROTRACK",
+    "scannedAt": {
+      "_seconds": 1771512158,
+      "_nanoseconds": 797000000
+    }
+  },
+  "7G8JhXBNkfGpNKWIqjO6": {
+    "passId": "iNj7jLcKW4eqV6G92UQY",
+    "memberId": null,
+    "scannerId": "device-id-placeholder",
+    "status": "valid",
+    "eventId": "upside-down-ctf",
+    "eventName": "UPSIDE DOWN – THE STRANGEST CTF EVER",
+    "scannedAt": {
+      "_seconds": 1771515493,
+      "_nanoseconds": 840000000
+    }
+  },
+  "7klBNv6GswOq6tF6BuRD": {
+    "passId": "OobdXhi6T3pPKwvnxjYj",
+    "memberId": null,
+    "scannerId": "device-id-placeholder",
+    "status": "valid",
+    "eventId": "battle-of-bands",
+    "eventName": "BATTLE OF BANDS",
+    "scannedAt": {
+      "_seconds": 1771905317,
+      "_nanoseconds": 823000000
+    }
+  },
+  "8KQfSYwX5HqTsK6StJKE": {
+    "passId": "OobdXhi6T3pPKwvnxjYj",
+    "memberId": null,
+    "scannerId": "device-id-placeholder",
+    "status": "valid",
+    "eventId": "mock-global-summit",
+    "eventName": "MOCK GLOBAL SUMMIT: VENEZUELA–GREENLAND CRISIS",
+    "scannedAt": {
+      "_seconds": 1771905320,
+      "_nanoseconds": 952000000
+    }
+  },
+  "8PSPZlHP5Zwet0axaKuh": {
+    "passId": "MfB5hfwom8L3mfv41wZj",
+    "memberId": "leader_1770359070701_23D9WMHm",
+    "scannerId": "device-id-placeholder",
+    "status": "valid",
+    "scannedAt": {
+      "_seconds": 1770465245,
+      "_nanoseconds": 702000000
+    }
+  },
+  "8SM8EAWbtlG5jWv5WVqO": {
+    "passId": "iNj7jLcKW4eqV6G92UQY",
+    "memberId": null,
+    "scannerId": "device-id-placeholder",
+    "status": "valid",
+    "eventId": "the-90-minute-ceo",
+    "eventName": "THE 90 MINUTE CEO",
+    "scannedAt": {
+      "_seconds": 1771514037,
+      "_nanoseconds": 766000000
+    }
+  },
+  "90HZdiGf5aoAbsUdsGds": {
+    "passId": "iNj7jLcKW4eqV6G92UQY",
+    "memberId": null,
+    "scannerId": "device-id-placeholder",
+    "status": "valid",
+    "eventId": "building-games-web3",
+    "eventName": "BUILDING GAMES ON WEB3",
+    "scannedAt": {
+      "_seconds": 1771514037,
+      "_nanoseconds": 1000000
+    }
+  },
+  "96tx1ETG3BwMO4q7XOqa": {
+    "passId": "iNj7jLcKW4eqV6G92UQY",
+    "memberId": null,
+    "scannerId": "device-id-placeholder",
+    "status": "valid",
+    "eventId": "building-games-web3",
+    "eventName": "BUILDING GAMES ON WEB3",
+    "scannedAt": {
+      "_seconds": 1771513489,
+      "_nanoseconds": 793000000
+    }
+  },
+  "AUmwYPeAtqAbHRkMNhUi": {
+    "passId": "iNj7jLcKW4eqV6G92UQY",
+    "memberId": null,
+    "scannerId": "device-id-placeholder",
+    "status": "valid",
+    "eventId": "rap-a-thon",
+    "eventName": "RAP-A-THON",
+    "scannedAt": {
+      "_seconds": 1771514031,
+      "_nanoseconds": 349000000
+    }
+  },
+  "Aqf9gA5DGeaVJZwAkciW": {
+    "passId": "OobdXhi6T3pPKwvnxjYj",
+    "memberId": null,
+    "scannerId": "device-id-placeholder",
+    "status": "valid",
+    "eventId": "designers-onboard",
+    "eventName": "DESIGNERS ONBOARD",
+    "scannedAt": {
+      "_seconds": 1771905323,
+      "_nanoseconds": 43000000
+    }
+  },
+  "B3Z6VlHkGgGgfAHoR3my": {
+    "passId": "iNj7jLcKW4eqV6G92UQY",
+    "memberId": null,
+    "scannerId": "device-id-placeholder",
+    "status": "valid",
+    "scannedAt": {
+      "_seconds": 1771427647,
+      "_nanoseconds": 428000000
+    }
+  },
+  "CrXcbeFAYyZk13xi0jfY": {
+    "passId": "iNj7jLcKW4eqV6G92UQY",
+    "memberId": null,
+    "scannerId": "device-id-placeholder",
+    "status": "valid",
+    "eventId": "prompt-pixel",
+    "eventName": "PROMPT PIXEL",
+    "scannedAt": {
+      "_seconds": 1771514036,
+      "_nanoseconds": 317000000
+    }
+  },
+  "DZY9H0Z6ZyYtYYQBGbEj": {
+    "passId": "OobdXhi6T3pPKwvnxjYj",
+    "memberId": null,
+    "scannerId": "device-id-placeholder",
+    "status": "valid",
+    "eventId": "frame-spot",
+    "eventName": "FRAME SPOT",
+    "scannedAt": {
+      "_seconds": 1771905316,
+      "_nanoseconds": 824000000
+    }
+  },
+  "E5jQpvGXLcizH1NFqhH2": {
+    "passId": "OobdXhi6T3pPKwvnxjYj",
+    "memberId": null,
+    "scannerId": "device-id-placeholder",
+    "status": "valid",
+    "eventId": "filmfinatics",
+    "eventName": "FILM FINATICS",
+    "scannedAt": {
+      "_seconds": 1771905319,
+      "_nanoseconds": 110000000
+    }
+  },
+  "E6WoxeCzyMcr15IbU8e8": {
+    "passId": "OobdXhi6T3pPKwvnxjYj",
+    "memberId": null,
+    "scannerId": "device-id-placeholder",
+    "status": "valid",
+    "eventId": "dual-dance",
+    "eventName": "DUAL DANCE",
+    "scannedAt": {
+      "_seconds": 1771905319,
+      "_nanoseconds": 34000000
+    }
+  },
+  "EEdjLIaHGeOIvvclyd5n": {
+    "passId": "iNj7jLcKW4eqV6G92UQY",
+    "memberId": null,
+    "scannerId": "device-id-placeholder",
+    "status": "valid",
+    "eventId": "cypher",
+    "eventName": "CYPHER",
+    "scannedAt": {
+      "_seconds": 1771514032,
+      "_nanoseconds": 764000000
+    }
+  },
+  "Ef3a8qsE98LZYWn7i9kA": {
+    "passId": "OobdXhi6T3pPKwvnxjYj",
+    "memberId": null,
+    "scannerId": "device-id-placeholder",
+    "status": "valid",
+    "eventId": "prompt-pixel",
+    "eventName": "PROMPT PIXEL",
+    "scannedAt": {
+      "_seconds": 1771905321,
+      "_nanoseconds": 251000000
+    }
+  },
+  "EfSe7C4CCT5QDiiHuLex": {
+    "passId": "iNj7jLcKW4eqV6G92UQY",
+    "memberId": null,
+    "scannerId": "device-id-placeholder",
+    "status": "valid",
+    "eventId": "gaming-event",
+    "eventName": "GAMING EVENT",
+    "scannedAt": {
+      "_seconds": 1771515498,
+      "_nanoseconds": 841000000
+    }
+  },
+  "GCRyDEh2RlauJGbc57IP": {
+    "passId": "LhAl8RjdtsQJaPinmEaP",
+    "memberId": null,
+    "scannerId": "device-id-placeholder",
+    "status": "valid",
+    "scannedAt": {
+      "_seconds": 1771304374,
+      "_nanoseconds": 143000000
+    }
+  }
+}

@@ -15,7 +15,7 @@ export default function SignInPage() {
 
   useEffect(() => {
     if (!mounted || loading) return;
-    if (user && userData?.isOrganizer) {
+    if (user && (userData?.isOrganizer || userData?.adminRole)) {
       router.replace('/');
       return;
     }
@@ -32,7 +32,7 @@ export default function SignInPage() {
     );
   }
 
-  if (user && !userData?.isOrganizer) {
+  if (user && !(userData?.isOrganizer || userData?.adminRole)) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-[#09090b] p-6">
         <div className="h-12 w-12 rounded-xl bg-red-500/10 flex items-center justify-center">

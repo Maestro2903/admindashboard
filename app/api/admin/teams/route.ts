@@ -4,6 +4,8 @@ import { getAdminFirestore } from '@/lib/firebase/adminApp';
 import { rateLimitAdmin, rateLimitResponse } from '@/lib/security/adminRateLimiter';
 import type { DocumentData } from 'firebase-admin/firestore';
 
+export const dynamic = 'force-dynamic';
+
 function getString(rec: Record<string, unknown>, key: string): string | undefined {
     const v = rec[key];
     return typeof v === 'string' ? v : undefined;
@@ -77,6 +79,47 @@ export async function GET(req: NextRequest) {
                 teamEventMap.set(teamId, eventName);
             }
         });
+
+        // 2nd Pass Event Mapping Fallback: Check 'payments' collection for missing teams
+        // Older teams (e.g. Fushion Duo) only stored selectedEvents inside payments, not passes
+        const missingEventTeams = Array.from(teamMap.values()).filter(t => {
+            const tId = getString(t, 'teamId');
+            return tId && !teamEventMap.has(tId);
+        });
+
+        if (missingEventTeams.length > 0) {
+            const paymentDocs = await Promise.all(
+                missingEventTeams.map(async (t) => {
+                    const orderId = getString(t as Record<string, unknown>, 'orderId');
+                    if (!orderId) return null;
+                    const pDoc = await db.collection('payments').doc(orderId).get();
+                    if (!pDoc.exists) return null;
+                    const data = pDoc.data() as { selectedEvents?: string[] } | undefined;
+                    return {
+                        teamId: getString(t as Record<string, unknown>, 'teamId'),
+                        selectedEvents: data?.selectedEvents
+                    };
+                })
+            );
+
+            for (const pData of paymentDocs) {
+                if (pData && pData.teamId && Array.isArray(pData.selectedEvents) && pData.selectedEvents.length > 0) {
+                    const fallbackName = pData.selectedEvents
+                        .filter((slug): slug is string => typeof slug === 'string')
+                        .map((slug: string) => slug
+                            .replace(/[-_]+/g, ' ')
+                            .split(' ')
+                            .filter(Boolean)
+                            .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1))
+                            .join(' ')
+                        )
+                        .join(', ');
+                    if (fallbackName) {
+                        teamEventMap.set(pData.teamId, fallbackName);
+                    }
+                }
+            }
+        }
 
         const records = [];
 

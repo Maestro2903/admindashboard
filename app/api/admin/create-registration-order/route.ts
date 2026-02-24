@@ -95,8 +95,14 @@ export async function POST(req: NextRequest) {
             registeredByAdmin: result.uid
         });
 
-        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_MAIN_SITE_URL || 'http://localhost:3000';
-        const cfPayload = {
+        let baseUrl = (process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_MAIN_SITE_URL || 'http://localhost:3000').trim();
+        baseUrl = baseUrl.replace(/\/$/, '');
+
+        // CRITICAL: Cashfree Production rejects 'localhost' in notify_url.
+        const isProduction = process.env.NEXT_PUBLIC_CASHFREE_ENV === 'production';
+        const isLocalhost = baseUrl.includes('localhost') || baseUrl.includes('127.0.0.1');
+
+        const cfPayload: any = {
             order_amount: amount,
             order_currency: "INR",
             order_id: orderId,
@@ -107,6 +113,7 @@ export async function POST(req: NextRequest) {
                 customer_phone: phone.replace(/[^0-9]/g, '').slice(-10)
             },
             order_meta: {
+                ...(isProduction && isLocalhost ? {} : { notify_url: `${baseUrl}/api/webhooks/cashfree` }),
                 return_url: `${baseUrl}/admin/registrations?order_id={order_id}`
             }
         };
@@ -127,7 +134,7 @@ export async function POST(req: NextRequest) {
         if (!response.ok) {
             console.error('[ManualCreateOrder] Cashfree status:', response.status, 'Error:', data);
             return Response.json({
-                error: 'Cashfree API Error',
+                error: `Cashfree Error (${data.code || response.status}): ${data.message || 'Verification failed'}`,
                 message: data.message || 'Failed to create manual order',
                 code: data.code,
                 details: data

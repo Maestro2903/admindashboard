@@ -94,7 +94,8 @@ export async function POST(req: NextRequest) {
         await db.collection('onspotPayments').doc(cashfreeOrderId).set(paymentDoc);
 
         // 2. Call Cashfree API to create order and get paymentSessionId
-        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || process.env.APP_URL || process.env.NEXT_PUBLIC_MAIN_SITE_URL;
+        let baseUrl = (process.env.NEXT_PUBLIC_BASE_URL || process.env.APP_URL || process.env.NEXT_PUBLIC_MAIN_SITE_URL || '').trim();
+        baseUrl = baseUrl.replace(/\/$/, '');
 
         // Normalize phone: remove non-digits and take last 10
         const rawPhone = (registrationData.phone as string) || '9999999999';
@@ -112,13 +113,20 @@ export async function POST(req: NextRequest) {
             },
         };
 
-        // Only add notify_url if it's an absolute URL
-        if (baseUrl && baseUrl.startsWith('http')) {
+        // Only add order_meta if we have a valid absolute URL.
+        // CRITICAL: Cashfree Production rejects 'localhost' in notify_url.
+        const isProduction = process.env.NEXT_PUBLIC_CASHFREE_ENV === 'production';
+        const isLocalhost = baseUrl.includes('localhost') || baseUrl.includes('127.0.0.1');
+
+        if (baseUrl.startsWith('http')) {
             orderPayload.order_meta = {
-                notify_url: `${baseUrl.replace(/\/$/, '')}/api/webhooks/cashfree`,
-                return_url: `${baseUrl.replace(/\/$/, '')}/admin/registrations?order_id={order_id}`
+                // If on localhost in production, skip notify_url to avoid Cashfree rejection.
+                ...(isProduction && isLocalhost ? {} : { notify_url: `${baseUrl}/api/webhooks/cashfree` }),
+                return_url: `${baseUrl}/admin/registrations?order_id={order_id}`
             };
         }
+
+        console.log('[CreateOrder] Final Payload:', JSON.stringify(orderPayload, null, 2));
 
         const cfResponse = await fetch(`${CASHFREE_BASE}/orders`, {
             method: 'POST',
@@ -133,11 +141,17 @@ export async function POST(req: NextRequest) {
 
         const cfData = await cfResponse.json();
         if (!cfResponse.ok) {
-            console.error('[CreateOrder] Cashfree status:', cfResponse.status, 'Error:', cfData);
+            console.error('[CreateOrder] Cashfree Error Details:', {
+                status: cfResponse.status,
+                data: cfData,
+                env: process.env.NEXT_PUBLIC_CASHFREE_ENV,
+                orderId: cashfreeOrderId
+            });
+
             return Response.json(
                 {
-                    error: 'Cashfree API Error',
-                    message: cfData.message || 'Failed to create order',
+                    error: `Cashfree Error (${cfData.code || cfResponse.status}): ${cfData.message || 'Check terminal logs'}`,
+                    message: cfData.message,
                     code: cfData.code,
                     details: cfData
                 },

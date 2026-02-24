@@ -294,6 +294,30 @@ export async function GET(req: NextRequest) {
       if (doc.exists && teamIds[i]) teamsById.set(teamIds[i], doc.data() as Record<string, unknown>);
     });
 
+    // Fetch additional users from payment.userId and team.leaderId
+    const additionalUserIds = new Set<string>();
+    paymentDocs.forEach((doc) => {
+      if (doc.exists) {
+        const uid = getString(doc.data() as Record<string, unknown>, 'userId');
+        if (uid && !usersById.has(uid)) additionalUserIds.add(uid);
+      }
+    });
+    teamDocs.forEach((doc) => {
+      if (doc.exists) {
+        const lid = getString(doc.data() as Record<string, unknown>, 'leaderId');
+        if (lid && !usersById.has(lid)) additionalUserIds.add(lid);
+      }
+    });
+
+    if (additionalUserIds.size > 0) {
+      const additionalUserDocs = await Promise.all(
+        Array.from(additionalUserIds).map((id) => db.collection('users').doc(id).get())
+      );
+      additionalUserDocs.forEach((doc) => {
+        if (doc.exists) usersById.set(doc.id, doc.data() as Record<string, unknown>);
+      });
+    }
+
     const eventsById = new Map<string, { name: string }>();
     eventDocs.forEach((doc) => {
       if (!doc.exists) return;
@@ -312,19 +336,39 @@ export async function GET(req: NextRequest) {
       const paymentStatus = typeof payment.status === 'string' ? payment.status : '';
       if (paymentStatus !== 'success') continue;
 
-      const userId = getString(d, 'userId') ?? '';
-      const user = usersById.get(userId) ?? {};
+      // STEP 2: Fix user resolution logic
+      const teamId = getString(d, 'teamId');
+      const team = teamId ? teamsById.get(teamId) : null;
+      const userId =
+        getString(d, 'userId') ??
+        getString(payment as Record<string, unknown>, 'userId') ??
+        getString(team ?? {}, 'leaderId') ??
+        null;
+
+      const user = userId ? usersById.get(userId) : null;
       const paymentCustomer = asRecord((payment as Record<string, unknown>).customerDetails);
 
+      // STEP 1: Debug logging for missing college
+      if (!getString(user ?? {}, 'college')) {
+        console.log('[DEBUG] Missing college for pass:', {
+          passId: doc.id,
+          'pass.userId': getString(d, 'userId'),
+          'payment.userId': getString(payment as Record<string, unknown>, 'userId'),
+          'team.leaderId': getString(team ?? {}, 'leaderId'),
+          'resolved userId': userId,
+          'resolved user.college': getString(user ?? {}, 'college'),
+        });
+      }
+
       const userName =
-        getString(user, 'name') ??
+        getString(user ?? {}, 'name') ??
         getString(payment as Record<string, unknown>, 'name') ??
         (paymentCustomer
           ? getString(paymentCustomer, 'customer_name') ?? getString(paymentCustomer, 'name')
           : undefined) ??
         '';
       const userPhone =
-        getString(user, 'phone') ??
+        getString(user ?? {}, 'phone') ??
         getString(payment as Record<string, unknown>, 'phone') ??
         (paymentCustomer
           ? getString(paymentCustomer, 'customer_phone') ?? getString(paymentCustomer, 'phone')
@@ -354,14 +398,11 @@ export async function GET(req: NextRequest) {
       const teamSnapshot = asRecord(d.teamSnapshot);
       const eventName = deriveEventName(type, d, teamSnapshot, eventNames);
 
-      // STEP 2: Safe college resolution with team fallback
-      const teamId = getString(d, 'teamId');
-      const team = teamId ? teamsById.get(teamId) : null;
+      // STEP 3: Fix college resolution with proper fallback chain
       const college =
-        getString(user, 'college') ??
-        getString(payment as Record<string, unknown>, 'college') ??
-        (team ? getString(team, 'leaderCollege') : null) ??
-        (teamSnapshot ? getString(teamSnapshot, 'leaderCollege') : null) ??
+        getString(user ?? {}, 'college') ??
+        getString(team ?? {}, 'leaderCollege') ??
+        getString(teamSnapshot ?? {}, 'leaderCollege') ??
         '';
 
       const base: PassManagementRecord = {

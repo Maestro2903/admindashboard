@@ -61,6 +61,7 @@
       "collectionGroup": "passes",
       "queryScope": "COLLECTION",
       "fields": [
+        { "fieldPath": "selectedEvents", "arrayConfig": "CONTAINS" },
         { "fieldPath": "eventCategory", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
@@ -69,6 +70,101 @@
       "collectionGroup": "passes",
       "queryScope": "COLLECTION",
       "fields": [
+        { "fieldPath": "selectedEvents", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "eventType", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "passes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "passType", "order": "ASCENDING" },
+        { "fieldPath": "selectedEvents", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "eventCategory", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "passes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "passType", "order": "ASCENDING" },
+        { "fieldPath": "selectedEvents", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "eventType", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "passes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "eventCategory", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "passes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "eventType", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "passes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "passType", "order": "ASCENDING" },
+        { "fieldPath": "eventCategory", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "passes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "passType", "order": "ASCENDING" },
+        { "fieldPath": "eventType", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "passes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "eventCategory", "order": "ASCENDING" },
+        { "fieldPath": "eventType", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "passes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "selectedEvents", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "eventCategory", "order": "ASCENDING" },
+        { "fieldPath": "eventType", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "passes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "passType", "order": "ASCENDING" },
+        { "fieldPath": "eventCategory", "order": "ASCENDING" },
+        { "fieldPath": "eventType", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "passes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "passType", "order": "ASCENDING" },
+        { "fieldPath": "selectedEvents", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "eventCategory", "order": "ASCENDING" },
         { "fieldPath": "eventType", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]

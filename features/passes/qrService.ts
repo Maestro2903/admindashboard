@@ -58,13 +58,19 @@ export function verifySignedQR(token: string): { valid: true; passId: string } |
   }
 }
 
+import { encrypt } from './qrEncryption';
+
+
 export function createQRPayload(passId: string, userId: string, passType: string): string {
   const signedToken = createSignedQR(passId);
 
-  return JSON.stringify({
+  const payload = JSON.stringify({
     passId,
     userId,
     passType,
     token: signedToken,
   });
+
+  // Apply Layer 2 security (Full Encryption)
+  return encrypt(payload);
 }

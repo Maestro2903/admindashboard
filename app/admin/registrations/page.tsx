@@ -1,194 +1,210 @@
 'use client';
 
-import * as React from 'react';
+import { useState, useMemo } from 'react';
 import { useAuth } from '@/features/auth/AuthContext';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
-import { IconCreditCard, IconUserPlus } from '@tabler/icons-react';
+import type { RegistrationRow, RegistrationStatus } from '@/types/admin';
+import { useRegistrations } from '@/hooks/use-registrations';
+import { RegistrationsFiltersBar } from '@/components/admin/RegistrationsFiltersBar';
+import { RegistrationsTable } from '@/components/admin/RegistrationsTable';
+import { RegistrationsConvertModal } from '@/components/admin/RegistrationsConvertModal';
 import { toast } from 'sonner';
-// @ts-expect-error No type definitions available for the Cashfree JS SDK
-import { load } from '@cashfreepayments/cashfree-js';
 
-let cashfree: any;
-const initializeCashfree = async () => {
-    cashfree = await load({
-        mode: process.env.NEXT_PUBLIC_CASHFREE_ENV === 'production' ? 'production' : 'sandbox',
-    });
-};
+export default function AdminRegistrationsPage() {
+  const { user } = useAuth();
+  const {
+    registrations,
+    loading,
+    error,
+    page,
+    pageSize,
+    total,
+    totalPages,
+    filters,
+    setSearch,
+    setPassType,
+    setDateRange,
+    setPage,
+    refetch,
+  } = useRegistrations(user ?? null);
 
-initializeCashfree();
+  const [convertOpen, setConvertOpen] = useState(false);
+  const [convertTarget, setConvertTarget] = useState<RegistrationRow | null>(null);
+  const [convertLoading, setConvertLoading] = useState(false);
+  const [convertError, setConvertError] = useState<string | null>(null);
 
-const PASS_TYPES = [
-    { value: 'day_pass', label: 'Day Pass (₹500)' },
-    { value: 'proshow', label: 'Proshow (₹1500)' },
-    { value: 'group_events', label: 'Group Events (₹500)' },
-    { value: 'sana_concert', label: 'SaNa Concert (₹2000)' },
-];
+  const passTypeOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          registrations
+            .map((r) => r.passType)
+            .filter((v): v is string => Boolean(v))
+        )
+      ).sort((a, b) => a.localeCompare(b)),
+    [registrations]
+  );
 
-export default function RegistrationsPage() {
-    const { user, userData, loading: authLoading } = useAuth();
+  const handleConvertClick = (row: RegistrationRow) => {
+    setConvertTarget(row);
+    setConvertError(null);
+    setConvertOpen(true);
+  };
 
-    const [formData, setFormData] = React.useState({
-        name: '',
-        email: '',
-        phone: '',
-        college: '',
-        passType: '',
-    });
+  const handleConvertSubmit = async (notes?: string) => {
+    if (!user || !convertTarget) return;
+    setConvertLoading(true);
+    setConvertError(null);
+    try {
+      const token = await user.getIdToken(false);
 
-    const [isSubmitting, setIsSubmitting] = React.useState(false);
-    const hasAccess = !authLoading && userData?.adminRole && ['manager', 'superadmin'].includes(userData.adminRole);
+      // 1. Create the Order
+      const res = await fetch('/api/payment/create-order', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          registrationId: convertTarget.id,
+          notes,
+        }),
+      });
 
-    React.useEffect(() => {
-        // Detect return redirect from Cashfree
-        const urlParams = new URLSearchParams(window.location.search);
-        const completedOrderId = urlParams.get('order_id');
-        if (completedOrderId) {
-            toast.success(`Payment successful for Order ID: ${completedOrderId}. You can find the record in Operations!`);
-            // Clean up the URL
-            window.history.replaceState({}, document.title, window.location.pathname);
-        }
-    }, []);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || `Order creation failed: ${res.status}`);
+      }
 
-    const handleCreateOrder = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!user) return;
-        try {
-            setIsSubmitting(true);
-            const token = await user.getIdToken(false);
+      const { paymentSessionId, orderId } = data;
 
-            const res = await fetch('/api/admin/create-registration-order', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${token}`
-                },
-                body: JSON.stringify(formData)
-            });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || 'Failed to create order');
+      // 2. Open Cashfree Checkout Modal
+      const { openCashfreeCheckout } = await import('@/features/payments/cashfreeClient.js');
+      const checkoutResult = await openCashfreeCheckout(paymentSessionId);
 
-            if (data.paymentSessionId) {
-                toast.success('Order created! Initiating checkout...');
+      if (checkoutResult.error) {
+        throw new Error(checkoutResult.error.message || 'Payment modal failed');
+      }
 
-                const checkoutOptions = {
-                    paymentSessionId: data.paymentSessionId,
-                    redirectTarget: '_self'
-                };
+      // 3. Verify Payment
+      toast.info('Verifying payment...');
+      const verifyRes = await fetch('/api/payment/verify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ orderId }),
+      });
 
-                cashfree.checkout(checkoutOptions);
-            }
-        } catch (err: any) {
-            toast.error(err.message);
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
+      const verifyData = await verifyRes.json();
+      if (!verifyRes.ok) {
+        throw new Error(verifyData.error || 'Verification failed');
+      }
 
-    if (authLoading) return <div className="p-8 text-white">Loading...</div>;
+      toast.success('Payment successful and pass issued!');
+      setConvertOpen(false);
+      setConvertTarget(null);
+      refetch();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Payment process failed';
+      setConvertError(message);
+      toast.error(message);
+    } finally {
+      setConvertLoading(false);
+    }
+  };
 
-    if (!hasAccess) {
-        return (
-            <div className="flex h-[50vh] flex-col items-center justify-center space-y-4">
-                <h2 className="text-xl font-bold text-white">Access Denied</h2>
-                <p className="text-zinc-400">You do not have permission to manually register attendees.</p>
-            </div>
-        );
+  const handleStatusChange = async (row: RegistrationRow, status: RegistrationStatus) => {
+    if (!user) return;
+
+    // If the user selects "converted", trigger the on-spot payment flow
+    if (status === 'converted') {
+      handleConvertClick(row);
+      return;
     }
 
-    return (
-        <div className="max-w-2xl mx-auto py-8">
-            <div className="mb-8 border-b border-zinc-800 pb-4">
-                <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-                    <IconUserPlus className="text-emerald-500" />
-                    Manual Registration
-                </h1>
-                <p className="text-zinc-400 text-sm mt-1">Register a new attendee and generate a Cashfree checkout session natively.</p>
-            </div>
+    try {
+      const token = await user.getIdToken(false);
+      const res = await fetch('/api/admin/update-registration-status', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          registrationId: row.id,
+          status,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const message = (data as { error?: string }).error ?? `Failed: ${res.status}`;
+        throw new Error(message);
+      }
+      toast.success(`Status updated to ${status}`);
+      refetch();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update status');
+    }
+  };
 
-            <form onSubmit={handleCreateOrder} className="space-y-6 bg-zinc-900 border border-zinc-800 p-6 rounded-xl">
-                <div className="space-y-4">
-                    <div>
-                        <Label className="text-zinc-300">Full Name</Label>
-                        <Input
-                            required
-                            value={formData.name}
-                            onChange={(e) => setFormData(f => ({ ...f, name: e.target.value }))}
-                            placeholder="Attendee Name"
-                            className="mt-1 bg-zinc-950 border-zinc-800 text-white"
-                        />
-                    </div>
+  const handleViewDetails = (row: RegistrationRow) => {
+    // Minimal implementation: simple alert-like toast; can be replaced with a proper detail modal.
+    toast.info(`${row.name || 'Unknown'} • ${row.passType} • ${row.email || 'no email'}`);
+  };
 
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <Label className="text-zinc-300">Email Address</Label>
-                            <Input
-                                required
-                                type="email"
-                                value={formData.email}
-                                onChange={(e) => setFormData(f => ({ ...f, email: e.target.value }))}
-                                placeholder="name@example.com"
-                                className="mt-1 bg-zinc-950 border-zinc-800 text-white"
-                            />
-                        </div>
-                        <div>
-                            <Label className="text-zinc-300">Phone Number</Label>
-                            <Input
-                                required
-                                type="tel"
-                                value={formData.phone}
-                                onChange={(e) => setFormData(f => ({ ...f, phone: e.target.value }))}
-                                placeholder="+91"
-                                className="mt-1 bg-zinc-950 border-zinc-800 text-white"
-                            />
-                        </div>
-                    </div>
-
-                    <div>
-                        <Label className="text-zinc-300">College / Institution</Label>
-                        <Input
-                            required
-                            value={formData.college}
-                            onChange={(e) => setFormData(f => ({ ...f, college: e.target.value }))}
-                            placeholder="University Name"
-                            className="mt-1 bg-zinc-950 border-zinc-800 text-white"
-                        />
-                    </div>
-
-                    <div>
-                        <Label className="text-zinc-300">Select Pass</Label>
-                        <Select required value={formData.passType} onValueChange={(v) => setFormData(f => ({ ...f, passType: v }))}>
-                            <SelectTrigger className="mt-1 bg-zinc-950 border-zinc-800 text-white">
-                                <SelectValue placeholder="Choose a pass to purchase" />
-                            </SelectTrigger>
-                            <SelectContent className="bg-zinc-800 border-zinc-700 text-white">
-                                {PASS_TYPES.map(p => (
-                                    <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                </div>
-
-                <div className="pt-4 border-t border-zinc-800">
-                    <Button
-                        type="submit"
-                        disabled={isSubmitting || !formData.passType}
-                        className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
-                    >
-                        <IconCreditCard size={18} className="mr-2" />
-                        {isSubmitting ? 'Generating Checkout...' : 'Book & Pay'}
-                    </Button>
-                </div>
-            </form>
+  return (
+    <div className="space-y-4 fade-in">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-white">Registrations</h1>
+          <p className="text-sm text-zinc-500 mt-0.5">
+            Manage on-spot registrations and generate Cashfree payment links.
+          </p>
         </div>
-    );
+        {typeof total === 'number' && (
+          <div className="rounded-full bg-zinc-900 border border-zinc-800 px-3 py-1 text-xs text-zinc-400">
+            {total.toLocaleString('en-IN')} total
+          </div>
+        )}
+      </div>
+
+      <RegistrationsFiltersBar
+        search={filters.q ?? ''}
+        onSearchChange={setSearch}
+        passType={filters.passType}
+        onPassTypeChange={setPassType}
+        dateFrom={filters.from}
+        dateTo={filters.to}
+        onDateRangeChange={setDateRange}
+        passTypeOptions={passTypeOptions}
+      />
+
+      <RegistrationsTable
+        rows={registrations}
+        loading={loading}
+        error={error}
+        page={page}
+        pageSize={pageSize}
+        total={total}
+        onPageChange={(next) => {
+          // Guard against over-advancing when totalPages is known
+          if (totalPages && next > totalPages) return;
+          setPage(next);
+        }}
+        onViewDetails={handleViewDetails}
+        onStatusChange={handleStatusChange}
+      />
+
+      <RegistrationsConvertModal
+        open={convertOpen}
+        onOpenChange={setConvertOpen}
+        registration={convertTarget}
+        onSubmit={handleConvertSubmit}
+        submitting={convertLoading}
+        error={convertError}
+      />
+    </div>
+  );
 }
+

@@ -138,35 +138,23 @@ export async function GET(req: NextRequest) {
 
     const db = getAdminFirestore();
 
-    // Primary pagination is pass-based (one record per pass). Success-only filter applied after join.
-    // eventId: use selectedEvents for compatibility with legacy docs; eventIds used in display/resolution.
+    // WORKAROUND: To completely avoid composite indexes, we fetch ALL passes without any where() clauses
+    // and do ALL filtering in-memory. This is the only way to avoid Firebase composite index requirements.
+    // where() + limit() or where() + orderBy() both require composite indexes.
     let basePassQuery: Query<DocData> = db.collection('passes');
-    if (passType) basePassQuery = basePassQuery.where('passType', '==', passType);
-    if (eventId) basePassQuery = basePassQuery.where('selectedEvents', 'array-contains', eventId);
-    if (eventCategory) basePassQuery = basePassQuery.where('eventCategory', '==', eventCategory);
-    if (eventType) basePassQuery = basePassQuery.where('eventType', '==', eventType);
-    if (fromDate) {
-      const from = new Date(fromDate);
-      if (!Number.isNaN(from.getTime())) basePassQuery = basePassQuery.where('createdAt', '>=', from);
-    }
-    if (toDate) {
-      const to = new Date(toDate);
-      if (!Number.isNaN(to.getTime())) basePassQuery = basePassQuery.where('createdAt', '<=', to);
-    }
-    basePassQuery = basePassQuery.orderBy('createdAt', 'desc');
-
-    const scanLimit = Math.min(pageSize * 5, 500);
-    let passQuery: Query<DocData> = basePassQuery;
-    if (cursor) {
-      const cursorDoc = await db.collection('passes').doc(cursor).get();
-      if (cursorDoc.exists) {
-        passQuery = passQuery.startAfter(cursorDoc);
-      }
-    } else if (page > 1) {
-      passQuery = passQuery.limit(Math.min(page * pageSize, 1000));
-    } else {
-      passQuery = passQuery.limit(scanLimit);
-    }
+    let inMemoryFilters: Record<string, unknown> = {};
+    
+    // Store ALL filter criteria for in-memory filtering
+    if (passType) inMemoryFilters.passType = passType;
+    if (eventId) inMemoryFilters.eventId = eventId;
+    if (eventCategory) inMemoryFilters.eventCategory = eventCategory;
+    if (eventType) inMemoryFilters.eventType = eventType;
+    if (fromDate) inMemoryFilters.fromDate = fromDate;
+    if (toDate) inMemoryFilters.toDate = toDate;
+    
+    // Fetch a large batch without any filters (just limit) to avoid composite index requirement
+    const scanLimit = 2000; // Fetch enough to handle filtering
+    let passQuery: Query<DocData> = basePassQuery.limit(scanLimit);
 
     // When financial mode, compute total revenue from all passes matching filters (same as passes page data).
     const totalRevenuePromise =
@@ -178,6 +166,30 @@ export async function GET(req: NextRequest) {
               if (!includeArchived) {
                 docs = docs.filter((d) => (d.data() as Record<string, unknown>).isArchived !== true);
               }
+              
+              // Apply same in-memory filters as main query  
+              docs = docs.filter((d) => {
+                const data = d.data() as Record<string, unknown>;
+                if (inMemoryFilters.passType && getString(data, 'passType') !== inMemoryFilters.passType) return false;
+                if (inMemoryFilters.eventId) {
+                  const selectedEvents = getStringArray(data, 'selectedEvents');
+                  if (!selectedEvents.includes(inMemoryFilters.eventId as string)) return false;
+                }
+                if (inMemoryFilters.eventCategory && getString(data, 'eventCategory') !== inMemoryFilters.eventCategory) return false;
+                if (inMemoryFilters.eventType && getString(data, 'eventType') !== inMemoryFilters.eventType) return false;
+                if (inMemoryFilters.fromDate) {
+                  const createdAt = data.createdAt;
+                  const createdDate = createdAt instanceof Date ? createdAt : (createdAt as any)?.toDate?.();
+                  if (createdDate && createdDate < new Date(inMemoryFilters.fromDate as string)) return false;
+                }
+                if (inMemoryFilters.toDate) {
+                  const createdAt = data.createdAt;
+                  const createdDate = createdAt instanceof Date ? createdAt : (createdAt as any)?.toDate?.();
+                  if (createdDate && createdDate > new Date(inMemoryFilters.toDate as string)) return false;
+                }
+                return true;
+              });
+              
               const paymentIds = uniqStrings(
                 docs.map((d) => getString(d.data() as Record<string, unknown>, 'paymentId') ?? null)
               ).filter(Boolean);
@@ -210,11 +222,75 @@ export async function GET(req: NextRequest) {
       passDocs = passDocs.filter((d) => (d.data() as Record<string, unknown>).isArchived !== true);
     }
 
-    // If page-based pagination was requested, slice the requested page before joining.
-    const slicedPassDocs =
-      !cursor && page > 1
-        ? passDocs.slice((page - 1) * pageSize, page * pageSize)
-        : passDocs;
+    // Apply in-memory filters (ALL filters since we skipped them in Firestore to avoid composite indexes)
+    passDocs = passDocs.filter((d) => {
+      const data = d.data() as Record<string, unknown>;
+      
+      // Filter by passType
+      if (inMemoryFilters.passType) {
+        if (getString(data, 'passType') !== inMemoryFilters.passType) return false;
+      }
+      
+      // Filter by eventId
+      if (inMemoryFilters.eventId) {
+        const selectedEvents = getStringArray(data, 'selectedEvents');
+        if (!selectedEvents.includes(inMemoryFilters.eventId as string)) return false;
+      }
+      
+      // Filter by eventCategory
+      if (inMemoryFilters.eventCategory) {
+        if (getString(data, 'eventCategory') !== inMemoryFilters.eventCategory) return false;
+      }
+      
+      // Filter by eventType
+      if (inMemoryFilters.eventType) {
+        if (getString(data, 'eventType') !== inMemoryFilters.eventType) return false;
+      }
+      
+      // Filter by date range
+      if (inMemoryFilters.fromDate) {
+        const createdAt = data.createdAt;
+        const createdDate = createdAt instanceof Date ? createdAt : 
+                           (createdAt as any)?.toDate?.();
+        if (createdDate) {
+          const from = new Date(inMemoryFilters.fromDate as string);
+          if (createdDate < from) return false;
+        }
+      }
+      
+      if (inMemoryFilters.toDate) {
+        const createdAt = data.createdAt;
+        const createdDate = createdAt instanceof Date ? createdAt : 
+                           (createdAt as any)?.toDate?.();
+        if (createdDate) {
+          const to = new Date(inMemoryFilters.toDate as string);
+          if (createdDate > to) return false;
+        }
+      }
+      
+      return true;
+    });
+
+    // Sort in-memory by createdAt descending (since we skipped orderBy in Firestore to avoid composite indexes)
+    passDocs.sort((a, b) => {
+      const aData = a.data() as Record<string, unknown>;
+      const bData = b.data() as Record<string, unknown>;
+      const aCreated = aData.createdAt instanceof Date ? aData.createdAt.getTime() : 
+                      (aData.createdAt as any)?.toDate?.()?.getTime() ?? 0;
+      const bCreated = bData.createdAt instanceof Date ? bData.createdAt.getTime() : 
+                      (bData.createdAt as any)?.toDate?.()?.getTime() ?? 0;
+      return bCreated - aCreated; // descending order (newest first)
+    });
+
+    // Apply pagination after in-memory filtering and sorting
+    const totalFiltered = passDocs.length;
+    const slicedPassDocs = passDocs.slice((page - 1) * pageSize, page * pageSize); // Page-based slicing
+    
+    // Determine if there's a next page
+    const hasNextPage = totalFiltered > (page * pageSize);
+    const nextCursor = hasNextPage && slicedPassDocs.length > 0 
+      ? slicedPassDocs[slicedPassDocs.length - 1].id 
+      : null;
 
     const userIds = uniqStrings(
       slicedPassDocs.map((d) => {
@@ -321,7 +397,8 @@ export async function GET(req: NextRequest) {
       return true;
     });
 
-    const recordsSliced = cursor || page === 1 ? recordsFiltered.slice(0, pageSize) : recordsFiltered;
+    // Already sliced earlier; don't slice again
+    const recordsSliced = recordsFiltered;
 
     const financialRecords: FinancialRecord[] =
       mode === 'financial'
@@ -360,13 +437,7 @@ export async function GET(req: NextRequest) {
           }))
         : [];
 
-    const lastDoc = passDocs[passDocs.length - 1];
-    const nextCursor =
-      cursor || page === 1
-        ? lastDoc && passDocs.length >= scanLimit
-          ? lastDoc.id
-          : null
-        : null;
+    // Use the nextCursor calculated earlier (after in-memory filtering)
 
     let metrics: UnifiedDashboardResponse['metrics'] = undefined;
     if (includeMetrics) {

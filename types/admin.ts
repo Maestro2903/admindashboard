@@ -7,6 +7,9 @@ export type PassStatus = 'paid' | 'used';
 /** Admin role for organizer users. Default (if missing/invalid) is 'viewer'. */
 export type AdminRole = 'viewer' | 'manager' | 'superadmin';
 
+/** Registration lifecycle status */
+export type RegistrationStatus = 'pending' | 'converted' | 'cancelled';
+
 /** Pass types from Firestore - closed set */
 export type PassType = 'day_pass' | 'group_events' | 'proshow' | 'sana_concert';
 
@@ -80,6 +83,30 @@ export interface ActivityFeedItem {
   type: 'scan' | 'payment' | 'team' | 'pass';
   message: string;
   timestamp: string;
+}
+
+/** Admin-facing projection of a registration row (pending/converted/cancelled). */
+export interface RegistrationRow {
+  id: string;
+  userId: string;
+  name: string;
+  email: string;
+  college: string | null;
+  phone: string | null;
+  passType: string;
+  selectedDays: string[] | null;
+  selectedEvents: string[] | null;
+  calculatedAmount: number;
+  status: RegistrationStatus;
+  createdAt: string;
+}
+
+export interface RegistrationsListResponse {
+  records: RegistrationRow[];
+  page: number;
+  pageSize: number;
+  total?: number;
+  totalPages?: number;
 }
 
 // ─── Operations (core table) ────────────────────────────────────────────────

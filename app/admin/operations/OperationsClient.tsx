@@ -17,7 +17,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import type { AdminEvent, OperationsRecord, OperationsDashboardResponse } from '@/types/admin';
-import { IconDownload, IconFilter, IconSearch, IconChevronLeft, IconChevronRight } from '@tabler/icons-react';
+import { IconDownload, IconFilter, IconSearch, IconChevronLeft, IconChevronRight, IconX, IconRefresh } from '@tabler/icons-react';
 import { formatPhone } from '@/lib/utils';
 
 async function fetchJson<T>(url: string, token: string): Promise<T> {
@@ -185,6 +185,14 @@ function OperationsClientInner() {
   const [dateFrom, setDateFrom] = React.useState(searchParams.get('from') ?? '');
   const [dateTo, setDateTo] = React.useState(searchParams.get('to') ?? '');
 
+  // Pending filter states (only applied on button click)
+  const [pendingPassType, setPendingPassType] = React.useState(passType);
+  const [pendingEventId, setPendingEventId] = React.useState(eventId);
+  const [pendingEventCategory, setPendingEventCategory] = React.useState(eventCategory);
+  const [pendingEventType, setPendingEventType] = React.useState(eventType);
+  const [pendingDateFrom, setPendingDateFrom] = React.useState(dateFrom);
+  const [pendingDateTo, setPendingDateTo] = React.useState(dateTo);
+
   const [cursorStack, setCursorStack] = React.useState<string[]>([]);
   const [rowSelection, setRowSelection] = React.useState<Record<string, boolean>>({});
   const [detailRecord, setDetailRecord] = React.useState<OperationsRecord | null>(null);
@@ -207,6 +215,32 @@ function OperationsClientInner() {
   const handleOpenDetail = React.useCallback((r: OperationsRecord) => {
     setDetailRecord(r);
   }, []);
+
+  const handleClearFilters = React.useCallback(() => {
+    setPassType('all');
+    setEventId('all');
+    setEventCategory('all');
+    setEventType('all');
+    setDateFrom('');
+    setDateTo('');
+    setPendingPassType('all');
+    setPendingEventId('all');
+    setPendingEventCategory('all');
+    setPendingEventType('all');
+    setPendingDateFrom('');
+    setPendingDateTo('');
+    setCursorStack([]);
+  }, []);
+
+  const handleApplyFilters = React.useCallback(() => {
+    setPassType(pendingPassType);
+    setEventId(pendingEventId);
+    setEventCategory(pendingEventCategory);
+    setEventType(pendingEventType);
+    setDateFrom(pendingDateFrom);
+    setDateTo(pendingDateTo);
+    setCursorStack([]);
+  }, [pendingPassType, pendingEventId, pendingEventCategory, pendingEventType, pendingDateFrom, pendingDateTo]);
 
   // Fetch events
   React.useEffect(() => {
@@ -412,7 +446,7 @@ function OperationsClientInner() {
               <label htmlFor="filter-pass-type" className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 mb-1.5 block">
                 Pass Type
               </label>
-              <Select value={passType} onValueChange={(v) => { setPassType(v); setCursorStack([]); }}>
+              <Select value={pendingPassType} onValueChange={setPendingPassType}>
                 <SelectTrigger id="filter-pass-type" className="bg-zinc-800 border-zinc-700 text-zinc-300">
                   <SelectValue placeholder="All" />
                 </SelectTrigger>
@@ -428,7 +462,7 @@ function OperationsClientInner() {
               <label htmlFor="filter-event" className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 mb-1.5 block">
                 Event
               </label>
-              <Select value={eventId} onValueChange={(v) => { setEventId(v); setCursorStack([]); }}>
+              <Select value={pendingEventId} onValueChange={setPendingEventId}>
                 <SelectTrigger id="filter-event" className="bg-zinc-800 border-zinc-700 text-zinc-300">
                   <SelectValue placeholder="All" />
                 </SelectTrigger>
@@ -445,7 +479,7 @@ function OperationsClientInner() {
                 <label htmlFor="filter-event-category" className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 mb-1.5 block">
                   Category
                 </label>
-                <Select value={eventCategory} onValueChange={(v) => { setEventCategory(v); setCursorStack([]); }}>
+                <Select value={pendingEventCategory} onValueChange={setPendingEventCategory}>
                   <SelectTrigger id="filter-event-category" className="bg-zinc-800 border-zinc-700 text-zinc-300">
                     <SelectValue placeholder="All" />
                   </SelectTrigger>
@@ -463,7 +497,7 @@ function OperationsClientInner() {
                 <label htmlFor="filter-event-type" className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 mb-1.5 block">
                   Type
                 </label>
-                <Select value={eventType} onValueChange={(v) => { setEventType(v); setCursorStack([]); }}>
+                <Select value={pendingEventType} onValueChange={setPendingEventType}>
                   <SelectTrigger id="filter-event-type" className="bg-zinc-800 border-zinc-700 text-zinc-300">
                     <SelectValue placeholder="All" />
                   </SelectTrigger>
@@ -483,8 +517,8 @@ function OperationsClientInner() {
               <Input
                 id="filter-date-from"
                 type="date"
-                value={dateFrom}
-                onChange={(e) => { setDateFrom(e.target.value); setCursorStack([]); }}
+                value={pendingDateFrom}
+                onChange={(e) => setPendingDateFrom(e.target.value)}
                 className="bg-zinc-800 border-zinc-700 text-zinc-300"
               />
             </div>
@@ -495,10 +529,32 @@ function OperationsClientInner() {
               <Input
                 id="filter-date-to"
                 type="date"
-                value={dateTo}
-                onChange={(e) => { setDateTo(e.target.value); setCursorStack([]); }}
+                value={pendingDateTo}
+                onChange={(e) => setPendingDateTo(e.target.value)}
                 className="bg-zinc-800 border-zinc-700 text-zinc-300"
               />
+            </div>
+            
+            {/* Filter Action Buttons */}
+            <div className="col-span-2 lg:col-span-4 flex items-center justify-end gap-2 pt-3 border-t border-zinc-800">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleClearFilters}
+                className="text-zinc-400 hover:text-white hover:bg-zinc-800"
+              >
+                <IconX size={16} className="mr-1.5" />
+                Clear Filters
+              </Button>
+              <Button
+                variant="default"
+                size="sm"
+                onClick={handleApplyFilters}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              >
+                <IconRefresh size={16} className="mr-1.5" />
+                Apply Filters
+              </Button>
             </div>
           </div>
         )}

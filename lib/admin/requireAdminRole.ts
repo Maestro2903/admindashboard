@@ -2,19 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireOrganizer, type OrganizerContext } from '@/lib/admin/requireOrganizer';
 import { getAdminFirestore } from '@/lib/firebase/adminApp';
 import type { AdminRole } from '@/types/admin';
+import { parseRole } from './adminRoles';
 
 export type AdminContext = OrganizerContext & { adminRole: AdminRole };
 
-const VALID_ROLES: AdminRole[] = ['viewer', 'manager', 'superadmin'];
-
-function parseRole(value: unknown): AdminRole {
-  if (typeof value === 'string' && VALID_ROLES.includes(value as AdminRole)) {
-    return value as AdminRole;
-  }
-  // SECURITY: Missing or invalid role defaults to 'viewer' (read-only).
-  // Only explicit 'manager' or 'superadmin' in Firestore grants mutation capabilities.
-  return 'viewer';
-}
+export * from './adminRoles';
 
 /**
  * Requires organizer and resolves adminRole from users/{uid}.adminRole.
@@ -32,21 +24,6 @@ export async function requireAdminRole(
   const adminRole = parseRole(data?.adminRole);
 
   return { uid: organizer.uid, adminRole };
-}
-
-/** True if role can mutate passes (mark used, revert, soft delete, update-pass). */
-export function canMutatePasses(role: AdminRole): boolean {
-  return role === 'manager' || role === 'superadmin';
-}
-
-/** True if role can mutate teams (update-team, bulk team actions). */
-export function canMutateTeams(role: AdminRole): boolean {
-  return role === 'manager' || role === 'superadmin';
-}
-
-/** True if role can mutate users, payments, events (update-user, update-payment, update-event). */
-export function canMutateUsersPaymentsEvents(role: AdminRole): boolean {
-  return role === 'superadmin';
 }
 
 /** Returns 403 response for insufficient role. */

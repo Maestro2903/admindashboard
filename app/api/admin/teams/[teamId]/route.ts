@@ -1,5 +1,6 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { requireOrganizer } from '@/lib/admin/requireOrganizer';
+import { requireAdminRole, canMutateTeams } from '@/lib/admin/requireAdminRole';
 import { getAdminFirestore } from '@/lib/firebase/adminApp';
 import { rateLimitAdmin, rateLimitResponse } from '@/lib/security/adminRateLimiter';
 
@@ -59,6 +60,43 @@ export async function GET(
   } catch (error) {
     console.error('Team detail API error:', error);
     return Response.json(
+      { error: error instanceof Error ? error.message : 'Server error' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ teamId: string }> }
+) {
+  const rl = await rateLimitAdmin(req, 'dashboard');
+  if (rl.limited) return rateLimitResponse(rl);
+
+  try {
+    const adminCtx = await requireAdminRole(req);
+    if (adminCtx instanceof NextResponse || adminCtx instanceof Response) return adminCtx;
+
+    if (!canMutateTeams(adminCtx.adminRole)) {
+      return NextResponse.json({ error: 'Forbidden: Insufficient admin role' }, { status: 403 });
+    }
+
+    const { teamId } = await params;
+    if (!teamId) {
+      return NextResponse.json({ error: 'Missing teamId' }, { status: 400 });
+    }
+
+    const db = getAdminFirestore();
+    const teamRef = db.collection('teams').doc(teamId);
+
+    // Also consider deleting the associated pass if necessary, or just delete the team document.
+    // Assuming deleting the team document is the main goal here based on conventional behavior mapping.
+    await teamRef.delete();
+
+    return NextResponse.json({ success: true, message: 'Team deleted successfully' });
+  } catch (error) {
+    console.error('Delete team error:', error);
+    return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Server error' },
       { status: 500 }
     );

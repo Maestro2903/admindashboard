@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import type { DocumentData, Query } from 'firebase-admin/firestore';
-import { requireOrganizer } from '@/lib/admin/requireOrganizer';
+import { requireAdminRole } from '@/lib/admin/requireAdminRole';
 import { getAdminFirestore } from '@/lib/firebase/adminApp';
 import { rateLimitAdmin, rateLimitResponse } from '@/lib/security/adminRateLimiter';
 import type { AdminPassRow, AdminPassesResponse, PassType } from '@/types/admin';
@@ -38,8 +38,11 @@ export async function GET(req: NextRequest) {
     const rl = await rateLimitAdmin(req, 'dashboard');
     if (rl.limited) return rateLimitResponse(rl);
 
-    const result = await requireOrganizer(req);
+    const result = await requireAdminRole(req);
     if (result instanceof Response) return result;
+    const { adminRole } = result;
+    const isSuperAdmin = adminRole === 'superadmin';
+    const canSeeAmount = adminRole === 'manager' || adminRole === 'superadmin';
 
     const { searchParams } = new URL(req.url);
     const typeRaw = (searchParams.get('type') ?? '').trim();
@@ -224,14 +227,20 @@ export async function GET(req: NextRequest) {
     const data = allRows.slice(start, start + pageSize);
     const hasMore = start + pageSize < allRows.length;
 
+    const summary = {
+      totalSold: isSuperAdmin ? totalSold : 0,
+      totalRevenue: isSuperAdmin ? totalRevenue : 0,
+      totalUsed: isSuperAdmin ? totalUsed : 0,
+      usagePercentage: isSuperAdmin && totalSold > 0 ? Math.round((totalUsed / totalSold) * 100) : 0,
+    };
+
+    const safeData = canSeeAmount
+      ? data
+      : data.map((row) => ({ ...row, amount: 0 }));
+
     const response: AdminPassesResponse = {
-      data,
-      summary: {
-        totalSold,
-        totalRevenue,
-        totalUsed,
-        usagePercentage: totalSold > 0 ? Math.round((totalUsed / totalSold) * 100) : 0,
-      },
+      data: safeData,
+      summary,
       pagination: {
         page,
         pageSize,

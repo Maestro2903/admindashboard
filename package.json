@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "admin:backfill-dashboard": "node scripts/admin/backfill-admin-dashboard.js",
     "admin:set-superadmin": "node scripts/admin/set-superadmin.js",
+    "admin:set-role": "node scripts/admin/set-admin-role.js",
     "vercel:env-push": "node scripts/sync-env-to-vercel.js"
   },
   "dependencies": {

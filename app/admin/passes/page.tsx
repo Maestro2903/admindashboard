@@ -50,7 +50,11 @@ function formatPhone(phone: string): string {
 }
 
 export default function PassesPage() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, userData, loading: authLoading } = useAuth();
+  const adminRole = (userData?.adminRole as string | undefined) ?? 'viewer';
+  const isSuperAdmin = adminRole === 'superadmin';
+  const canSeeAmount = adminRole === 'manager' || adminRole === 'superadmin';
+
   const [data, setData] = React.useState<AdminPassesResponse | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
@@ -101,19 +105,14 @@ export default function PassesPage() {
 
   const handleExportCsv = React.useCallback(() => {
     if (!data?.data) return;
-    const headers = ['Pass ID', 'User', 'Phone', 'College', 'Type', 'Event', 'Day', 'Amount', 'Used', 'Created'];
-    const rows = data.data.map((r) => [
-      r.id,
-      r.name,
-      r.phone || '',
-      r.college || '',
-      PASS_TYPE_LABELS[r.passType as PassType] || r.passType,
-      r.eventLabel || '',
-      r.selectedDay || '',
-      r.amount,
-      r.isUsed ? 'Yes' : 'No',
-      r.createdAt,
-    ]);
+    const headers = canSeeAmount
+      ? ['Pass ID', 'User', 'Phone', 'College', 'Type', 'Event', 'Day', 'Amount', 'Used', 'Created']
+      : ['Pass ID', 'User', 'Phone', 'College', 'Type', 'Event', 'Day', 'Used', 'Created'];
+    const rows = data.data.map((r) =>
+      canSeeAmount
+        ? [r.id, r.name, r.phone || '', r.college || '', PASS_TYPE_LABELS[r.passType as PassType] || r.passType, r.eventLabel || '', r.selectedDay || '', r.amount, r.isUsed ? 'Yes' : 'No', r.createdAt]
+        : [r.id, r.name, r.phone || '', r.college || '', PASS_TYPE_LABELS[r.passType as PassType] || r.passType, r.eventLabel || '', r.selectedDay || '', r.isUsed ? 'Yes' : 'No', r.createdAt]
+    );
     const csv = [headers, ...rows]
       .map((row) => row.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(','))
       .join('\r\n');
@@ -123,7 +122,7 @@ export default function PassesPage() {
     a.download = `passes-${passType}-${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
     URL.revokeObjectURL(a.href);
-  }, [data, passType]);
+  }, [data, passType, canSeeAmount]);
 
   const filteredData = React.useMemo(() => {
     if (!data?.data) return [];
@@ -179,8 +178,8 @@ export default function PassesPage() {
         </Button>
       </div>
 
-      {/* Summary Cards */}
-      {summary && (
+      {/* Summary Cards — Super Admin only */}
+      {isSuperAdmin && summary && (
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
             <div className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">Total Sold</div>
@@ -288,9 +287,11 @@ export default function PassesPage() {
                 <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-zinc-500">
                   Day
                 </th>
-                <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-zinc-500">
-                  Amount
-                </th>
+                {canSeeAmount && (
+                  <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-zinc-500">
+                    Amount
+                  </th>
+                )}
                 <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-zinc-500">
                   Used
                 </th>
@@ -303,7 +304,7 @@ export default function PassesPage() {
               {loading && !data ? (
                 Array.from({ length: 10 }).map((_, i) => (
                   <tr key={i}>
-                    {Array.from({ length: 10 }).map((_, j) => (
+                    {Array.from({ length: canSeeAmount ? 10 : 9 }).map((_, j) => (
                       <td key={j} className="px-4 py-3">
                         <div className="h-4 w-20 animate-pulse rounded bg-zinc-800" />
                       </td>
@@ -312,7 +313,7 @@ export default function PassesPage() {
                 ))
               ) : filteredData.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="px-4 py-12 text-center text-sm text-zinc-500">
+                  <td colSpan={canSeeAmount ? 10 : 9} className="px-4 py-12 text-center text-sm text-zinc-500">
                     No passes found
                   </td>
                 </tr>
@@ -334,7 +335,9 @@ export default function PassesPage() {
                     <td className="px-4 py-3 text-sm text-zinc-400 whitespace-nowrap">
                       {r.selectedDay || '—'}
                     </td>
-                    <td className="px-4 py-3 text-sm tabular-nums text-zinc-300">₹{r.amount}</td>
+                    {canSeeAmount && (
+                      <td className="px-4 py-3 text-sm tabular-nums text-zinc-300">₹{r.amount}</td>
+                    )}
                     <td className="px-4 py-3">
                       <span
                         className={`inline-flex rounded-md px-2 py-0.5 text-xs font-medium ${

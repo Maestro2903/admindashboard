@@ -97,14 +97,8 @@ export async function POST(req: NextRequest) {
       if (targetCollection !== 'events' || !canRunEventBulk(ctx)) return forbiddenRole();
     } else if (action === 'softDelete') {
       if (!canRunSoftDelete(targetCollection, ctx)) return forbiddenRole();
-    } else if (
-      !isPassBulkAction &&
-      !isTeamSoftDelete &&
-      !isPaymentDelete &&
-      action !== 'forceVerifyPayment' &&
-      action !== 'activateEvent' &&
-      action !== 'deactivateEvent'
-    ) {
+    } else if (!isPassBulkAction && !isTeamSoftDelete && !isPaymentDelete) {
+      // Any action not covered by the above branches and not a known bulk combination is forbidden.
       return forbiddenRole();
     }
 

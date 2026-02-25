@@ -97,9 +97,24 @@ export async function POST(req: NextRequest) {
         let baseUrl = (process.env.NEXT_PUBLIC_BASE_URL || process.env.APP_URL || process.env.NEXT_PUBLIC_MAIN_SITE_URL || '').trim();
         baseUrl = baseUrl.replace(/\/$/, '');
 
+        // Fallback for Vercel/dynamic host if baseUrl is empty.
+        if (!baseUrl && req.headers.get('host')) {
+            const host = req.headers.get('host') || 'localhost:3000';
+            const protocol = host.includes('localhost') ? 'http' : 'https';
+            baseUrl = `${protocol}://${host}`;
+        }
+
         // Normalize phone: remove non-digits and take last 10
         const rawPhone = (registrationData.phone as string) || '9999999999';
         const cleanPhone = rawPhone.replace(/[^0-9]/g, '').slice(-10) || '9999999999';
+
+        const isProduction = process.env.NEXT_PUBLIC_CASHFREE_ENV === 'production';
+        let safeReturnUrl = `${baseUrl}/admin/registrations?order_id={order_id}`;
+
+        // CRITICAL: Cashfree Production enforces HTTPS for both notify_url and return_url
+        if (isProduction && safeReturnUrl.startsWith('http://')) {
+            safeReturnUrl = safeReturnUrl.replace('http://', 'https://');
+        }
 
         const orderPayload: any = {
             order_amount: amount,
@@ -114,15 +129,13 @@ export async function POST(req: NextRequest) {
         };
 
         // Only add order_meta if we have a valid absolute URL.
-        // CRITICAL: Cashfree Production rejects 'localhost' in notify_url.
-        const isProduction = process.env.NEXT_PUBLIC_CASHFREE_ENV === 'production';
         const isLocalhost = baseUrl.includes('localhost') || baseUrl.includes('127.0.0.1');
 
         if (baseUrl.startsWith('http')) {
             orderPayload.order_meta = {
                 // If on localhost in production, skip notify_url to avoid Cashfree rejection.
                 ...(isProduction && isLocalhost ? {} : { notify_url: `${baseUrl}/api/webhooks/cashfree` }),
-                return_url: `${baseUrl}/admin/registrations?order_id={order_id}`
+                return_url: safeReturnUrl
             };
         }
 

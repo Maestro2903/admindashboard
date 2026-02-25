@@ -52,13 +52,18 @@ export async function POST(req: NextRequest) {
   if (rateLimitResponse) return rateLimitResponse;
 
   try {
-    const organizerResult = await requireOrganizer(req);
-    if (organizerResult instanceof NextResponse) return organizerResult;
-    const { uid: organizerUid } = organizerResult;
+    const isWebhook = req.headers.get('x-system-webhook') === 'true';
+    let organizerUid = 'system-webhook';
+
+    if (!isWebhook) {
+      const organizerResult = await requireOrganizer(req);
+      if (organizerResult instanceof NextResponse) return organizerResult;
+      organizerUid = organizerResult.uid;
+    }
 
     const db = getAdminFirestore();
     const { orderId } = await req.json();
-    console.log(`[FixPayment] Manual fix requested for: ${orderId} by organizer: ${organizerUid}`);
+    console.log(`[FixPayment] Manual fix or webhook requested for: ${orderId} by: ${organizerUid}`);
 
     if (!orderId || typeof orderId !== 'string') {
       return NextResponse.json({ error: 'Missing orderId' }, { status: 400 });

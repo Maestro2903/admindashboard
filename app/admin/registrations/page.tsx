@@ -50,72 +50,96 @@ export default function AdminRegistrationsPage() {
     setConvertOpen(true);
   };
 
-  const handleConvertSubmit = async (notes?: string) => {
+  const handleConvertSubmit = async (paymentType: 'upi' | 'cash', notes?: string) => {
     if (!user || !convertTarget) return;
     setConvertLoading(true);
     setConvertError(null);
     try {
       const token = await user.getIdToken(false);
 
-      // 1. Create the Order
-      const res = await fetch('/api/payment/create-order', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          registrationId: convertTarget.id,
-          notes,
-        }),
-      });
+      if (paymentType === 'cash') {
+        // Trigger 2: Cash Payment
+        const res = await fetch('/api/admin/process-cash-payment', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            registrationId: convertTarget.id,
+            notes,
+          }),
+        });
 
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(data.error || `Order creation failed: ${res.status}`);
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(data.error || `Cash payment failed: ${res.status}`);
+        }
+
+        toast.success('Cash payment processed and pass issued!');
+      } else {
+        // Trigger 1: UPI / Cashfree Link
+        // 1. Create the Order
+        const res = await fetch('/api/payment/create-order', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            registrationId: convertTarget.id,
+            notes,
+          }),
+        });
+
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(data.error || `Order creation failed: ${res.status}`);
+        }
+
+        const { paymentSessionId, orderId } = data;
+
+        // 2. Open Cashfree Checkout Modal
+        const { openCashfreeCheckout } = await import('@/features/payments/cashfreeClient.js');
+        const checkoutResult = await openCashfreeCheckout(paymentSessionId);
+
+        if (checkoutResult.error) {
+          throw new Error(checkoutResult.error.message || 'Payment modal failed');
+        }
+
+        // 3. Verify Payment
+        toast.info('Verifying payment...');
+        const verifyRes = await fetch('/api/payment/verify', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ orderId }),
+        });
+
+        let verifyData: { error?: string; details?: unknown } = {};
+        try {
+          verifyData = await verifyRes.json();
+        } catch (jsonError) {
+          const text = await verifyRes.text().catch(() => 'Unknown error');
+          throw new Error(`Verification failed: ${text || `Server returned ${verifyRes.status}`}`);
+        }
+
+        if (!verifyRes.ok) {
+          const errorMsg = verifyData.error || 'Verification failed';
+          const details = verifyData.details ? ` Details: ${JSON.stringify(verifyData.details)}` : '';
+          throw new Error(`${errorMsg}${details}`);
+        }
+
+        toast.success('Payment successful and pass issued!');
       }
 
-      const { paymentSessionId, orderId } = data;
-
-      // 2. Open Cashfree Checkout Modal
-      const { openCashfreeCheckout } = await import('@/features/payments/cashfreeClient.js');
-      const checkoutResult = await openCashfreeCheckout(paymentSessionId);
-
-      if (checkoutResult.error) {
-        throw new Error(checkoutResult.error.message || 'Payment modal failed');
-      }
-
-      // 3. Verify Payment
-      toast.info('Verifying payment...');
-      const verifyRes = await fetch('/api/payment/verify', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ orderId }),
-      });
-
-      let verifyData: { error?: string; details?: unknown } = {};
-      try {
-        verifyData = await verifyRes.json();
-      } catch (jsonError) {
-        const text = await verifyRes.text().catch(() => 'Unknown error');
-        throw new Error(`Verification failed: ${text || `Server returned ${verifyRes.status}`}`);
-      }
-
-      if (!verifyRes.ok) {
-        const errorMsg = verifyData.error || 'Verification failed';
-        const details = verifyData.details ? ` Details: ${JSON.stringify(verifyData.details)}` : '';
-        throw new Error(`${errorMsg}${details}`);
-      }
-
-      toast.success('Payment successful and pass issued!');
       setConvertOpen(false);
       setConvertTarget(null);
       refetch();
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Payment process failed';
+      const message = err instanceof Error ? err.message : 'Process failed';
       setConvertError(message);
       toast.error(message);
     } finally {

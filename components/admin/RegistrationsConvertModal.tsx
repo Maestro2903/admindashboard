@@ -7,11 +7,19 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from '@/components/ui/sheet';
 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+
 interface RegistrationsConvertModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   registration: RegistrationRow | null;
-  onSubmit: (notes?: string) => Promise<void> | void;
+  onSubmit: (paymentType: 'upi' | 'cash', notes?: string) => Promise<void> | void;
   submitting: boolean;
   error: string | null;
 }
@@ -25,16 +33,18 @@ export function RegistrationsConvertModal({
   error,
 }: RegistrationsConvertModalProps) {
   const [notes, setNotes] = useState('');
+  const [paymentType, setPaymentType] = useState<'upi' | 'cash'>('upi');
 
   const handleOpenChange = (next: boolean) => {
     if (!next) {
       setNotes('');
+      setPaymentType('upi');
     }
     onOpenChange(next);
   };
 
   const handleSubmit = async () => {
-    await onSubmit(notes.trim() || undefined);
+    await onSubmit(paymentType, notes.trim() || undefined);
   };
 
   const amountLabel =
@@ -76,6 +86,27 @@ export function RegistrationsConvertModal({
 
               <div className="space-y-2">
                 <Label
+                  className="text-xs uppercase tracking-wider text-zinc-500"
+                >
+                  Payment Type
+                </Label>
+                <Select
+                  value={paymentType}
+                  onValueChange={(val: 'upi' | 'cash') => setPaymentType(val)}
+                  disabled={submitting}
+                >
+                  <SelectTrigger className="bg-zinc-900 border-zinc-800 text-sm text-zinc-100 h-10">
+                    <SelectValue placeholder="Select payment method" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-zinc-900 border-zinc-800 text-zinc-100">
+                    <SelectItem value="upi">UPI (Cashfree Link)</SelectItem>
+                    <SelectItem value="cash">Cash (Direct Approval)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label
                   htmlFor="convert-notes"
                   className="text-xs uppercase tracking-wider text-zinc-500"
                 >
@@ -87,6 +118,7 @@ export function RegistrationsConvertModal({
                   onChange={(e) => setNotes(e.target.value)}
                   className="bg-zinc-900 border-zinc-800 text-sm text-zinc-100"
                   placeholder="Internal note, e.g. who initiated payment..."
+                  disabled={submitting}
                 />
               </div>
             </>
@@ -114,7 +146,10 @@ export function RegistrationsConvertModal({
             disabled={submitting || !registration}
             onClick={handleSubmit}
           >
-            {submitting ? 'Creating link…' : 'Create Cashfree link'}
+            {submitting 
+              ? (paymentType === 'cash' ? 'Processing…' : 'Creating link…')
+              : (paymentType === 'cash' ? 'Confirm Cash Payment' : 'Create Cashfree link')
+            }
           </Button>
         </SheetFooter>
       </SheetContent>

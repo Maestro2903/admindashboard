@@ -19,6 +19,8 @@ lerna-debug.log*
 !package.json
 !tsconfig.json
 !next.lock
+.env.vercel.production
+.env.example
 
 # OS / editor junk
 .DS_Store

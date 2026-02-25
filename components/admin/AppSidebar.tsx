@@ -23,6 +23,7 @@ export interface SidebarNavItem {
 const NAV_ITEMS: SidebarNavItem[] = [
   { href: '/admin/operations', label: 'Operations', icon: IconSettings2 },
   { href: '/admin/live-checkin', label: 'Live Check-In', icon: IconScan },
+  { href: '/admin/on-spot', label: 'On-Spot Registration', icon: IconUsers, superadminOnly: true },
   { href: '/admin/passes', label: 'Passes', icon: IconTicket },
   { href: '/admin/teams', label: 'Teams', icon: IconUsersGroup },
   { href: '/admin/users', label: 'Users', icon: IconUsers },
@@ -44,8 +45,8 @@ export function AppSidebar({
 
   const visibleItems = NAV_ITEMS.filter((item) => {
     if (!item.superadminOnly) return true;
-    // Treat "manager" as editor role; both manager and superadmin can see registrations.
-    return adminRole === 'superadmin' || adminRole === 'manager';
+    // Treat "manager" and "editor" as roles that can see restricted registrations/on-spot items.
+    return adminRole === 'superadmin' || adminRole === 'manager' || adminRole === 'editor';
   });
 
   return (
@@ -70,11 +71,10 @@ export function AppSidebar({
               <Link
                 key={href}
                 href={href}
-                className={`group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150 ${
-                  isActive
-                    ? 'bg-zinc-800 text-white'
-                    : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200'
-                }`}
+                className={`group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150 ${isActive
+                  ? 'bg-zinc-800 text-white'
+                  : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200'
+                  }`}
               >
                 <Icon size={18} className={isActive ? 'text-white' : 'text-zinc-500 group-hover:text-zinc-300'} />
                 {label}
@@ -88,7 +88,7 @@ export function AppSidebar({
       <div className="border-t border-zinc-800 p-3 space-y-2">
         <div className="flex items-center justify-between px-3 py-1">
           <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">
-            {adminRole === 'superadmin' ? 'Superadmin' : adminRole === 'viewer' ? 'Viewer' : 'Admin'}
+            {adminRole === 'superadmin' ? 'Superadmin' : adminRole === 'viewer' ? 'Viewer' : (adminRole === 'manager' || adminRole === 'editor') ? 'Editor' : 'Admin'}
           </span>
           <a
             href={MAIN_SITE_URL}

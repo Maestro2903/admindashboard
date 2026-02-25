@@ -39,9 +39,14 @@ export async function requireOrganizer(
 
   const db = getAdminFirestore();
   const userDoc = await db.collection('users').doc(decoded.uid).get();
-  if (!userDoc.exists || !userDoc.data()?.isOrganizer) {
+  const data = userDoc.data();
+  const isOrg = data?.isOrganizer === true;
+  const adminRole = data?.adminRole;
+  const hasValidAdminRole = ['editor', 'manager', 'superadmin'].includes(adminRole as string);
+
+  if (!userDoc.exists || (!isOrg && !hasValidAdminRole)) {
     return NextResponse.json(
-      { error: 'Forbidden: Organizer access required' },
+      { error: 'Forbidden: Organizer or Admin access required' },
       { status: 403 }
     );
   }

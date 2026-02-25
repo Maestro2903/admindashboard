@@ -31,18 +31,32 @@ export async function GET(req: NextRequest) {
     }
     const events: AdminEvent[] = docs.map((doc) => {
       const d = doc.data() as Record<string, unknown>;
+      const rawTeamConfig = d.teamConfig as Record<string, unknown> | undefined;
+      let teamConfig: AdminEvent['teamConfig'] | undefined;
+      if (rawTeamConfig && typeof rawTeamConfig === 'object') {
+        const min = typeof rawTeamConfig.minMembers === 'number' ? rawTeamConfig.minMembers : undefined;
+        const max = typeof rawTeamConfig.maxMembers === 'number' ? rawTeamConfig.maxMembers : undefined;
+        const price = typeof rawTeamConfig.pricePerPerson === 'number' ? rawTeamConfig.pricePerPerson : undefined;
+        if (min !== undefined && max !== undefined && price !== undefined) {
+          teamConfig = { minMembers: min, maxMembers: max, pricePerPerson: price };
+        }
+      }
       return {
         id: doc.id,
         name: String(d.name ?? doc.id),
         category: typeof d.category === 'string' ? d.category : undefined,
         type: typeof d.type === 'string' ? d.type : undefined,
         date: typeof d.date === 'string' ? d.date : undefined,
+        dates: Array.isArray(d.dates) ? (d.dates.filter((x) => typeof x === 'string') as string[]) : undefined,
         venue: typeof d.venue === 'string' ? d.venue : undefined,
         allowedPassTypes: Array.isArray(d.allowedPassTypes)
           ? (d.allowedPassTypes.filter((x) => typeof x === 'string') as string[])
           : undefined,
         isActive: typeof d.isActive === 'boolean' ? d.isActive : undefined,
         isArchived: d.isArchived === true,
+        teamConfig,
+        startTime: typeof d.startTime === 'string' ? d.startTime : undefined,
+        endTime: typeof d.endTime === 'string' ? d.endTime : undefined,
       };
     });
 

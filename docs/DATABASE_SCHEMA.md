@@ -132,11 +132,14 @@ Event metadata (name, date, venue, allowed pass types, etc.).
 | `name` / `title` | string | Event name |
 | `category` | string | Optional |
 | `type` | string | Optional |
-| `date` | string | Optional |
+| `date` | string | Optional; primary/first day for display |
+| `dates` | string[] | Optional; multi-day events list (e.g. `["26/02/26","27/02/26"]`); day-pass shows event when selected day is in this array |
 | `venue` | string | Optional |
 | `allowedPassTypes` | string[] | Optional |
 | `isActive` | boolean | Optional |
 | `isArchived` | boolean | Optional |
+| `teamConfig` | object | Optional. For group events: `{ minMembers: number, maxMembers: number, pricePerPerson: number }`. Used by On-Spot Registration to enforce team size and pricing. |
+| `startTime` / `endTime` | string | Optional; for display and **time conflict** checks. Use normalized format: `"10:30"`, `"14:00"` (24h) or `"10:30 AM"`. Dotted `"10.30"` is also parsed. Required for overlap detection when users select multiple events (same date + overlapping range = conflict). |
 
 Document ID is used as `eventId` in passes (`selectedEvents` array or `eventId`).
 

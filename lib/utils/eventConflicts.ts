@@ -8,37 +8,72 @@
 export interface EventWithTiming {
     id: string;
     name: string;
-    date?: string; // YYYY-MM-DD
-    day?: number; // 1, 2, or 3
-    startTime?: string; // "10:30 AM"
-    endTime?: string; // "2:00 PM"
+    date?: string;
+    /** Multi-day events: list of dates; used for conflict (same date + time overlap) */
+    dates?: string[];
+    day?: number;
+    startTime?: string;
+    endTime?: string;
     venue?: string;
 }
 
+/** Get all dates an event occurs on (dates array or single date) */
+export function getEventDates(e: EventWithTiming): string[] {
+    if (e.dates?.length) return e.dates;
+    if (e.date) return [e.date];
+    return [];
+}
+
+/** True if two events share at least one date */
+function shareADate(e1: EventWithTiming, e2: EventWithTiming): boolean {
+    const d1 = new Set(getEventDates(e1));
+    const d2 = getEventDates(e2);
+    return d2.some((d) => d1.has(d));
+}
+
 /**
- * Parse time string (e.g., "10:30 AM") to minutes since midnight
+ * Parse time string to minutes since midnight.
+ * Supports: "10:30", "10.30", "10:30 AM", "10:30 PM"
  * @returns Minutes since midnight, or null if parsing fails
  */
-export function parseTime(timeStr: string | undefined | null): number | null {
-    if (!timeStr) return null;
+export function toMinutes(timeStr: string | undefined | null): number | null {
+    if (!timeStr || typeof timeStr !== 'string') return null;
+    const trimmed = timeStr.trim();
+    if (!trimmed) return null;
 
-    const match = timeStr.trim().match(/(\d+):(\d+)\s*(AM|PM)/i);
-    if (!match) return null;
+    // Normalize "10.30" -> "10:30"
+    const normalized = trimmed.replace(/\./g, ':');
 
-    const hours = parseInt(match[1]);
-    const minutes = parseInt(match[2]);
-    const period = match[3].toUpperCase();
-
-    let h = hours;
-
-    // Convert to 24-hour format
-    if (period === 'PM' && h !== 12) {
-        h += 12;
-    } else if (period === 'AM' && h === 12) {
-        h = 0;
+    // 24h: "10:30" or "09:00"
+    const match24 = normalized.match(/^(\d{1,2}):(\d{2})$/);
+    if (match24) {
+        const hours = parseInt(match24[1], 10);
+        const minutes = parseInt(match24[2], 10);
+        if (hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59) {
+            return hours * 60 + minutes;
+        }
+        return null;
     }
 
-    return h * 60 + minutes;
+    // 12h: "10:30 AM" or "2:00 PM"
+    const match12 = normalized.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+    if (match12) {
+        let hours = parseInt(match12[1], 10);
+        const minutes = parseInt(match12[2], 10);
+        const period = match12[3].toUpperCase();
+        if (minutes < 0 || minutes > 59) return null;
+        if (period === 'PM' && hours !== 12) hours += 12;
+        else if (period === 'AM' && hours === 12) hours = 0;
+        if (hours < 0 || hours > 23) return null;
+        return hours * 60 + minutes;
+    }
+
+    return null;
+}
+
+/** @deprecated Use toMinutes; kept for backward compatibility */
+export function parseTime(timeStr: string | undefined | null): number | null {
+    return toMinutes(timeStr);
 }
 
 /**
@@ -55,8 +90,8 @@ export function doTimesOverlap(
     start2: string | undefined | null,
     end2: string | undefined | null
 ): boolean {
-    const s1 = parseTime(start1);
-    const s2 = parseTime(start2);
+    const s1 = toMinutes(start1);
+    const s2 = toMinutes(start2);
 
     // If either start time is missing, can't determine conflict
     if (s1 === null || s2 === null) {
@@ -64,27 +99,22 @@ export function doTimesOverlap(
     }
 
     // Parse end times, default to end of day (23:59 = 1439 minutes) if missing
-    const e1 = parseTime(end1) ?? (24 * 60 - 1); // 1439 minutes (11:59 PM)
-    const e2 = parseTime(end2) ?? (24 * 60 - 1);
+    const e1 = toMinutes(end1) ?? (24 * 60 - 1);
+    const e2 = toMinutes(end2) ?? (24 * 60 - 1);
 
-    // Check overlap: (start1 < end2) AND (start2 < end1)
+    // Overlap: A.start < B.end AND A.end > B.start
     return s1 < e2 && s2 < e1;
 }
 
 /**
- * Check if two events conflict (same day + overlapping times)
+ * Check if two events conflict (share at least one date + overlapping times)
  */
 export function doEventsConflict(
     event1: EventWithTiming,
     event2: EventWithTiming
 ): boolean {
-    // Different days = no conflict
-    // If date is missing, we check if they might conflict.
-    if (event1.date && event2.date && event1.date !== event2.date) {
-        return false;
-    }
-
-    // Same day, check time overlap
+    if (event1.id === event2.id) return false;
+    if (!shareADate(event1, event2)) return false;
     return doTimesOverlap(
         event1.startTime,
         event1.endTime,

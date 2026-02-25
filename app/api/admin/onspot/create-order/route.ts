@@ -4,12 +4,21 @@ import { getAdminFirestore } from '@/lib/firebase/adminApp';
 import { requireAdminRole, forbiddenRole } from '@/lib/admin/requireAdminRole';
 import { rateLimitAdmin, rateLimitResponse } from '@/lib/security/adminRateLimiter';
 
+const GROUP_EVENTS_PRICE_PER_PERSON = 250;
+
 const PASS_PRICES: Record<string, number> = {
     day_pass: 500,
-    group_events: 500,
+    group_events: GROUP_EVENTS_PRICE_PER_PERSON, // base; actual = totalMembers * 250
     sana_concert: 2000,
     test_pass: 1,
 };
+
+const memberSchema = z.object({
+    name: z.string().min(1),
+    phone: z.string().min(1),
+    email: z.string().optional(),
+    isLeader: z.boolean().optional(),
+});
 
 const bodySchema = z.object({
     name: z.string().min(1),
@@ -18,6 +27,10 @@ const bodySchema = z.object({
     college: z.string().min(1),
     passType: z.enum(['day_pass', 'group_events', 'sana_concert', 'test_pass']),
     selectedEvents: z.array(z.string()).optional(),
+    teamName: z.string().min(1).optional(),
+    members: z.array(memberSchema).optional(),
+    amount: z.number().positive().optional(),
+    pricePerPerson: z.number().positive().optional(),
 });
 
 const CASHFREE_BASE = process.env.NEXT_PUBLIC_CASHFREE_ENV === 'production'
@@ -44,11 +57,30 @@ export async function POST(req: NextRequest) {
         if (!parse.success) {
             return Response.json({ error: 'Validation failed', issues: parse.error.issues }, { status: 400 });
         }
-        const { name, email, phone, college, passType, selectedEvents } = parse.data;
+        const { name, email, phone, college, passType, selectedEvents, teamName, members: rawMembers, amount: bodyAmount, pricePerPerson: bodyPricePerPerson } = parse.data;
 
-        const amount = PASS_PRICES[passType];
-        if (amount === undefined) {
-            return Response.json({ error: 'Invalid pass type' }, { status: 400 });
+        let amount: number;
+        if (passType === 'group_events') {
+            const totalMembers = Math.max(1, rawMembers?.length ?? 1);
+            const pricePerPerson = bodyPricePerPerson ?? GROUP_EVENTS_PRICE_PER_PERSON;
+            amount = bodyAmount ?? totalMembers * pricePerPerson;
+            if (amount <= 0 || amount !== totalMembers * pricePerPerson) {
+                return Response.json(
+                    { error: `Group events amount must be ${totalMembers} × ₹${pricePerPerson} = ₹${totalMembers * pricePerPerson}` },
+                    { status: 400 }
+                );
+            }
+            if (!teamName?.trim() || !rawMembers?.length) {
+                return Response.json(
+                    { error: 'Group events require team name and at least one member' },
+                    { status: 400 }
+                );
+            }
+        } else {
+            amount = PASS_PRICES[passType] ?? 0;
+        }
+        if (amount === undefined || amount <= 0) {
+            return Response.json({ error: 'Invalid pass type or amount' }, { status: 400 });
         }
 
         const appId = process.env.NEXT_PUBLIC_CASHFREE_APP_ID || process.env.CASHFREE_APP_ID;
@@ -81,6 +113,31 @@ export async function POST(req: NextRequest) {
         }
 
         const orderId = `onspot_${Date.now()}_${userId.substring(0, 6)}`;
+        const eventIds = selectedEvents || [];
+
+        let teamId: string | undefined;
+        if (passType === 'group_events' && rawMembers?.length && teamName?.trim()) {
+            const teamRef = db.collection('teams').doc();
+            teamId = teamRef.id;
+            const members = rawMembers.map((m, i) => ({
+                memberId: `member_${Date.now()}_${i}`,
+                name: m.name.trim(),
+                phone: m.phone.trim(),
+                email: (m.email ?? '').trim() || undefined,
+                isLeader: i === 0,
+                attendance: { checkedIn: false, checkedInAt: null, checkedInBy: null },
+            }));
+            await teamRef.set({
+                leaderId: userId,
+                teamName: teamName.trim(),
+                members,
+                totalMembers: members.length,
+                paymentStatus: 'pending',
+                createdAt: new Date(),
+                updatedAt: new Date(),
+                eventIds,
+            });
+        }
 
         // 2. Create the Registration record
         const registrationRef = db.collection('registrations').doc(orderId);
@@ -91,18 +148,19 @@ export async function POST(req: NextRequest) {
             phone,
             college,
             passType,
-            selectedEvents: selectedEvents || [],
+            selectedEvents: eventIds,
             amount,
             status: 'pending',
             cashfreeOrderId: orderId,
             addedBy: result.uid,
             createdAt: new Date(),
             updatedAt: new Date(),
-            source: 'admin-onspot'
+            source: 'admin-onspot',
+            ...(teamId && { teamId }),
         });
 
         // 3. Create Firestore pending payment record (critical for fix-stuck-payment webhook functionality)
-        const paymentDoc = {
+        const paymentDoc: Record<string, unknown> = {
             registrationId: orderId,
             userId,
             amount,
@@ -112,8 +170,9 @@ export async function POST(req: NextRequest) {
             updatedAt: new Date(),
             source: 'admin-onspot',
             passType,
-            eventIds: selectedEvents || []
+            eventIds,
         };
+        if (teamId) paymentDoc.teamId = teamId;
         await db.collection('onspotPayments').doc(orderId).set(paymentDoc);
 
         // 3. Prepare Cashfree Payload

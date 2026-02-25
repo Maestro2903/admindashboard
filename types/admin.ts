@@ -397,16 +397,29 @@ export interface PassFiltersState {
   checkedInMax?: number;
 }
 
+/** Team rules for group events; stored on event doc as teamConfig */
+export interface EventTeamConfig {
+  minMembers: number;
+  maxMembers: number;
+  pricePerPerson: number;
+}
+
 export interface AdminEvent {
   id: string;
   name: string;
   category?: string;
   type?: string;
   date?: string;
+  /** Multi-day events: list of dates (e.g. ["26/02/26", "27/02/26"]); used with date for day-pass filtering */
+  dates?: string[];
   venue?: string;
+  startTime?: string;
+  endTime?: string;
   allowedPassTypes?: string[];
   isActive?: boolean;
   isArchived?: boolean;
+  /** For group events: min/max team size and price per person from DB */
+  teamConfig?: EventTeamConfig;
 }
 
 /** Audit log entry */

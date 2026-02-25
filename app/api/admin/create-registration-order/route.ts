@@ -95,12 +95,26 @@ export async function POST(req: NextRequest) {
             registeredByAdmin: result.uid
         });
 
-        let baseUrl = (process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_MAIN_SITE_URL || 'http://localhost:3000').trim();
+        let baseUrl = (process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_MAIN_SITE_URL || '').trim();
         baseUrl = baseUrl.replace(/\/$/, '');
+
+        // Fallback for Vercel/dynamic host if baseUrl is empty.
+        if (!baseUrl && req.headers.get('host')) {
+            const host = req.headers.get('host') || 'localhost:3000';
+            const protocol = host.includes('localhost') ? 'http' : 'https';
+            baseUrl = `${protocol}://${host}`;
+        }
 
         // CRITICAL: Cashfree Production rejects 'localhost' in notify_url.
         const isProduction = process.env.NEXT_PUBLIC_CASHFREE_ENV === 'production';
         const isLocalhost = baseUrl.includes('localhost') || baseUrl.includes('127.0.0.1');
+
+        let safeReturnUrl = `${baseUrl}/admin/registrations?order_id={order_id}`;
+
+        // CRITICAL: Cashfree Production enforces HTTPS for both notify_url and return_url
+        if (isProduction && safeReturnUrl.startsWith('http://')) {
+            safeReturnUrl = safeReturnUrl.replace('http://', 'https://');
+        }
 
         const cfPayload: any = {
             order_amount: amount,
@@ -114,7 +128,7 @@ export async function POST(req: NextRequest) {
             },
             order_meta: {
                 ...(isProduction && isLocalhost ? {} : { notify_url: `${baseUrl}/api/webhooks/cashfree` }),
-                return_url: `${baseUrl}/admin/registrations?order_id={order_id}`
+                return_url: safeReturnUrl
             }
         };
 

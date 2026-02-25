@@ -119,6 +119,7 @@ export async function POST(req: NextRequest) {
             type: payload.type,
             orderId: payload.data?.order?.order_id,
             orderStatus: payload.data?.order?.order_status,
+            fullPayload: JSON.stringify(payload).substring(0, 500)
         });
 
         // 1. Verify the signature using the Cashfree Secret Key and the x-webhook-signature header.

@@ -44,13 +44,25 @@ export async function POST(req: NextRequest) {
         // This avoids code duplication and ensures the same logic is used for both manual fixes and automatic verification.
         const host = req.headers.get('host') || 'localhost:3000';
         const protocol = host.includes('localhost') ? 'http' : 'https';
-        let baseUrl = process.env.NEXT_PUBLIC_BASE_URL || process.env.APP_URL || `${protocol}://${host}`;
+        
+        // Prefer APP_URL, then NEXT_PUBLIC_BASE_URL, then VERCEL_URL (if available), then construct from host
+        let baseUrl = process.env.APP_URL || process.env.NEXT_PUBLIC_BASE_URL;
+        if (!baseUrl && process.env.VERCEL_URL) {
+            baseUrl = `https://${process.env.VERCEL_URL}`;
+        }
+        if (!baseUrl) {
+            baseUrl = `${protocol}://${host}`;
+        }
+        
+        // Remove trailing slash if present
+        baseUrl = baseUrl.replace(/\/$/, '');
+        
         // Enforce HTTPS in production environments to avoid 308 redirects that drop Authorization headers
         if (baseUrl.startsWith('http://') && !baseUrl.includes('localhost')) {
             baseUrl = baseUrl.replace('http://', 'https://');
         }
 
-        console.log(`[VerifyOrder] Using baseUrl: ${baseUrl}`);
+        console.log(`[VerifyOrder] Using baseUrl: ${baseUrl} (from ${process.env.APP_URL ? 'APP_URL' : process.env.NEXT_PUBLIC_BASE_URL ? 'NEXT_PUBLIC_BASE_URL' : process.env.VERCEL_URL ? 'VERCEL_URL' : 'host header'})`);
 
         const authHeader = req.headers.get('Authorization') || '';
 
@@ -58,7 +70,10 @@ export async function POST(req: NextRequest) {
         let verifyData: unknown;
         
         try {
-            verifyRes = await fetch(`${baseUrl}/api/fix-stuck-payment`, {
+            const fixPaymentUrl = `${baseUrl}/api/fix-stuck-payment`;
+            console.log(`[VerifyOrder] Calling fix-stuck-payment at: ${fixPaymentUrl}`);
+            
+            verifyRes = await fetch(fixPaymentUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -66,6 +81,8 @@ export async function POST(req: NextRequest) {
                 },
                 body: JSON.stringify({ orderId }),
             });
+
+            console.log(`[VerifyOrder] fix-stuck-payment response status: ${verifyRes.status}`);
 
             // Try to parse JSON, but handle non-JSON responses gracefully
             const text = await verifyRes.text();
@@ -76,15 +93,28 @@ export async function POST(req: NextRequest) {
             }
 
             if (!verifyRes.ok) {
+                console.error(`[VerifyOrder] fix-stuck-payment failed with status ${verifyRes.status}:`, verifyData);
                 return Response.json(
-                    { error: (verifyData as { error?: string }).error || 'Verification failed', details: verifyData },
-                    { status: verifyRes.status }
+                    { 
+                        error: (verifyData as { error?: string }).error || 'Verification failed', 
+                        details: verifyData,
+                        statusCode: verifyRes.status,
+                    },
+                    { status: verifyRes.status >= 400 && verifyRes.status < 600 ? verifyRes.status : 500 }
                 );
             }
         } catch (fetchError) {
             console.error('[VerifyOrder] Fetch error:', fetchError);
+            const errorMessage = fetchError instanceof Error ? fetchError.message : 'Network error';
+            const errorStack = fetchError instanceof Error ? fetchError.stack : undefined;
+            console.error('[VerifyOrder] Fetch error details:', { errorMessage, errorStack, baseUrl, orderId });
             return Response.json(
-                { error: 'Failed to verify payment', details: fetchError instanceof Error ? fetchError.message : 'Network error' },
+                { 
+                    error: 'Failed to verify payment', 
+                    details: errorMessage,
+                    stack: errorStack,
+                    baseUrl,
+                },
                 { status: 500 }
             );
         }

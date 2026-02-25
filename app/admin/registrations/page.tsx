@@ -96,9 +96,18 @@ export default function AdminRegistrationsPage() {
         body: JSON.stringify({ orderId }),
       });
 
-      const verifyData = await verifyRes.json();
+      let verifyData: { error?: string; details?: unknown } = {};
+      try {
+        verifyData = await verifyRes.json();
+      } catch (jsonError) {
+        const text = await verifyRes.text().catch(() => 'Unknown error');
+        throw new Error(`Verification failed: ${text || `Server returned ${verifyRes.status}`}`);
+      }
+
       if (!verifyRes.ok) {
-        throw new Error(verifyData.error || 'Verification failed');
+        const errorMsg = verifyData.error || 'Verification failed';
+        const details = verifyData.details ? ` Details: ${JSON.stringify(verifyData.details)}` : '';
+        throw new Error(`${errorMsg}${details}`);
       }
 
       toast.success('Payment successful and pass issued!');

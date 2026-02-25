@@ -31,7 +31,8 @@ export default function OnSpotRegistrationPage() {
         email: '',
         phone: '',
         college: '',
-        passType: 'day_pass'
+        passType: 'day_pass',
+        paymentMethod: 'upi'
     });
 
     // Fetch Events
@@ -106,63 +107,83 @@ export default function OnSpotRegistrationPage() {
         try {
             const token = await user.getIdToken();
 
-            // 1. Create On-Spot Order
-            const res = await fetch('/api/admin/onspot/create-order', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({
-                    ...formData,
-                    selectedEvents: selectedEventIds
-                })
-            });
+            if (formData.paymentMethod === 'cash') {
+                // Cash Flow
+                const res = await fetch('/api/admin/onspot/process-cash', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({ ...formData, selectedEvents: selectedEventIds })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Failed to process cash payment');
 
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || 'Failed to create order');
+                const newReg: RecentRegistration = {
+                    orderId: data.orderId,
+                    name: formData.name, email: formData.email, passType: formData.passType,
+                    status: 'success', createdAt: new Date()
+                };
+                setRecentRegistrations(prev => [newReg, ...prev]);
+                toast.success('Registration successful! Pass issued.');
 
-            const { orderId, paymentSessionId } = data;
+            } else {
+                // 1. Create On-Spot Order (UPI Flow)
+                const res = await fetch('/api/admin/onspot/create-order', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        ...formData,
+                        selectedEvents: selectedEventIds
+                    })
+                });
 
-            // Add to recent activity as pending
-            const newReg: RecentRegistration = {
-                orderId,
-                name: formData.name,
-                email: formData.email,
-                passType: formData.passType,
-                status: 'pending',
-                createdAt: new Date()
-            };
-            setRecentRegistrations(prev => [newReg, ...prev]);
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Failed to create order');
 
-            // 2. Open Cashfree Checkout
-            const { openCashfreeCheckout } = await import('@/features/payments/cashfreeClient.js');
-            const checkoutResult = await openCashfreeCheckout(paymentSessionId);
+                const { orderId, paymentSessionId } = data;
 
-            if (checkoutResult.error) {
-                updateStatus(orderId, 'failed');
-                throw new Error(checkoutResult.error.message || 'Payment modal failed');
+                // Add to recent activity as pending
+                const newReg: RecentRegistration = {
+                    orderId,
+                    name: formData.name,
+                    email: formData.email,
+                    passType: formData.passType,
+                    status: 'pending',
+                    createdAt: new Date()
+                };
+                setRecentRegistrations(prev => [newReg, ...prev]);
+
+                // 2. Open Cashfree Checkout
+                const { openCashfreeCheckout } = await import('@/features/payments/cashfreeClient.js');
+                const checkoutResult = await openCashfreeCheckout(paymentSessionId);
+
+                if (checkoutResult.error) {
+                    updateStatus(orderId, 'failed');
+                    throw new Error(checkoutResult.error.message || 'Payment modal failed');
+                }
+
+                // 3. Verify Payment
+                toast.info('Verifying payment...');
+                const verifyRes = await fetch('/api/admin/onspot/verify', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ orderId })
+                });
+
+                const verifyData = await verifyRes.json();
+                if (!verifyRes.ok) {
+                    updateStatus(orderId, 'failed');
+                    throw new Error(verifyData.error || 'Verification failed');
+                }
+
+                toast.success('Registration successful! Pass issued.');
+                updateStatus(orderId, 'success');
             }
-
-            // 3. Verify Payment
-            toast.info('Verifying payment...');
-            const verifyRes = await fetch('/api/admin/onspot/verify', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({ orderId })
-            });
-
-            const verifyData = await verifyRes.json();
-            if (!verifyRes.ok) {
-                updateStatus(orderId, 'failed');
-                throw new Error(verifyData.error || 'Verification failed');
-            }
-
-            toast.success('Registration successful! Pass issued.');
-            updateStatus(orderId, 'success');
 
             // Clear form
             setFormData({
@@ -170,7 +191,8 @@ export default function OnSpotRegistrationPage() {
                 email: '',
                 phone: '',
                 college: '',
-                passType: 'day_pass'
+                passType: 'day_pass',
+                paymentMethod: 'upi'
             });
             setSelectedEventIds([]);
 
@@ -256,7 +278,7 @@ export default function OnSpotRegistrationPage() {
                                     className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-white/20 transition-all placeholder:text-zinc-700"
                                 />
                             </div>
-                            <div className="space-y-2 md:col-span-2">
+                            <div className="space-y-2">
                                 <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Pass Type</label>
                                 <select
                                     name="passType"
@@ -268,6 +290,18 @@ export default function OnSpotRegistrationPage() {
                                     <option value="group_events">Group Events - ₹500</option>
                                     <option value="sana_concert">Sana Concert - ₹2000</option>
                                     <option value="test_pass">Test Pass - ₹1</option>
+                                </select>
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Payment Method</label>
+                                <select
+                                    name="paymentMethod"
+                                    value={formData.paymentMethod}
+                                    onChange={handleInputChange}
+                                    className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-white/20 transition-all appearance-none cursor-pointer"
+                                >
+                                    <option value="upi">UPI (Cashfree Link)</option>
+                                    <option value="cash">Cash (Direct Approval)</option>
                                 </select>
                             </div>
                         </div>

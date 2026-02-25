@@ -2,9 +2,9 @@ import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { getAdminFirestore } from '@/lib/firebase/adminApp';
 import {
-  requireAdminRole,
-  requireSuperAdmin,
-  forbiddenRole,
+    requireAdminRole,
+    requireSuperAdmin,
+    forbiddenRole,
 } from '@/lib/admin/requireAdminRole';
 import { rateLimitAdmin, rateLimitResponse } from '@/lib/security/adminRateLimiter';
 
@@ -70,10 +70,10 @@ export async function POST(req: NextRequest) {
             }, { status: verifyRes.status });
         }
 
-        // Successfully verified, now update the status in onspot_student_registrations
+        // Successfully verified, now update the status in registrations
         const db = getAdminFirestore();
-        await db.collection('onspot_student_registrations').doc(orderId).update({
-            status: 'success',
+        await db.collection('registrations').doc(orderId).update({
+            status: 'converted',
             updatedAt: new Date()
         });
 

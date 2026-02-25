@@ -82,8 +82,9 @@ export async function POST(req: NextRequest) {
 
         const orderId = `onspot_${Date.now()}_${userId.substring(0, 6)}`;
 
-        // 2. Create the On-Spot Registration record
-        await db.collection('onspot_student_registrations').doc(orderId).set({
+        // 2. Create the Registration record
+        const registrationRef = db.collection('registrations').doc(orderId);
+        await registrationRef.set({
             userId,
             name,
             email,
@@ -97,7 +98,23 @@ export async function POST(req: NextRequest) {
             addedBy: result.uid,
             createdAt: new Date(),
             updatedAt: new Date(),
+            source: 'admin-onspot'
         });
+
+        // 3. Create Firestore pending payment record (critical for fix-stuck-payment webhook functionality)
+        const paymentDoc = {
+            registrationId: orderId,
+            userId,
+            amount,
+            status: 'pending',
+            cashfreeOrderId: orderId,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            source: 'admin-onspot',
+            passType,
+            eventIds: selectedEvents || []
+        };
+        await db.collection('onspotPayments').doc(orderId).set(paymentDoc);
 
         // 3. Prepare Cashfree Payload
         let baseUrl = (process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_MAIN_SITE_URL || '').trim();

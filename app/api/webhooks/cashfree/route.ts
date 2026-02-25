@@ -3,6 +3,113 @@ import crypto from 'crypto';
 import { getAdminFirestore } from '@/lib/firebase/adminApp';
 import * as admin from 'firebase-admin';
 
+// Process webhook asynchronously after acknowledging receipt
+async function processWebhookAsync(orderId: string) {
+    try {
+        const db = getAdminFirestore();
+
+        // 3. Idempotency Protection - Check if payment already processed
+        // Check both collections in parallel for faster response
+        const [existingPaymentsSnapshot, existingOnspotPaymentSnap] = await Promise.all([
+            db.collection('payments').where('cashfreeOrderId', '==', orderId).limit(1).get().catch(() => ({ empty: true, docs: [] } as any)),
+            db.collection('onspotPayments').doc(orderId).get().catch(() => null)
+        ]);
+
+        if (!existingPaymentsSnapshot.empty) {
+            const paymentData = existingPaymentsSnapshot.docs[0].data();
+            if (paymentData?.status === 'success') {
+                console.log(`[CashfreeWebhook] Payment already processed for orderId: ${orderId}`);
+                return;
+            }
+        }
+
+        if (existingOnspotPaymentSnap?.exists) {
+            const onspotData = existingOnspotPaymentSnap.data();
+            if (onspotData?.status === 'success') {
+                console.log(`[CashfreeWebhook] Onspot payment already processed for orderId: ${orderId}`);
+                return;
+            }
+        }
+
+        // 4. Find registration by orderId - try multiple strategies in parallel
+        let registrationId: string | null = null;
+
+        // Strategy 1: Extract from orderId format (fastest, no DB call)
+        if (orderId.startsWith('admin_')) {
+            const parts = orderId.split('_');
+            if (parts.length >= 2) {
+                registrationId = parts[1];
+                console.log(`[CashfreeWebhook] Extracted registrationId from orderId format: ${registrationId}`);
+            }
+        }
+
+        // Strategy 2 & 3: Check both collections in parallel if not found yet
+        if (!registrationId) {
+            const [onspotPaymentSnap, paymentsSnapshot] = await Promise.all([
+                db.collection('onspotPayments').doc(orderId).get().catch(() => null),
+                db.collection('payments').where('cashfreeOrderId', '==', orderId).limit(1).get().catch(() => ({ empty: true, docs: [] } as any))
+            ]);
+
+            if (onspotPaymentSnap?.exists) {
+                const onspotData = onspotPaymentSnap.data();
+                registrationId = onspotData?.registrationId as string | undefined || null;
+                if (registrationId) {
+                    console.log(`[CashfreeWebhook] Found registrationId from onspotPayments: ${registrationId}`);
+                }
+            }
+
+            if (!registrationId && !paymentsSnapshot.empty) {
+                const paymentData = paymentsSnapshot.docs[0].data();
+                registrationId = paymentData?.registrationId as string | undefined || null;
+                if (registrationId) {
+                    console.log(`[CashfreeWebhook] Found registrationId from payments: ${registrationId}`);
+                }
+            }
+        }
+
+        // Strategy 4: Try direct lookup (fallback)
+        if (!registrationId) {
+            const regSnap = await db.collection('registrations').doc(orderId).get().catch(() => null);
+            if (regSnap?.exists) {
+                registrationId = orderId;
+                console.log(`[CashfreeWebhook] Using orderId as registrationId (direct lookup): ${registrationId}`);
+            }
+        }
+
+        if (!registrationId) {
+            console.error(`[CashfreeWebhook] Registration not found for orderId: ${orderId}`);
+            return;
+        }
+
+        // 5. Idempotency check - verify registration exists and check current status
+        const registrationRef = db.collection('registrations').doc(registrationId);
+        const registrationSnap = await registrationRef.get();
+
+        if (!registrationSnap.exists) {
+            console.error(`[CashfreeWebhook] Registration document not found: ${registrationId}`);
+            return;
+        }
+
+        const currentStatus = registrationSnap.data()?.status;
+        console.log(`[CashfreeWebhook] Current registration status: ${currentStatus}`);
+
+        if (currentStatus === 'converted') {
+            console.log(`[CashfreeWebhook] Registration already converted: ${registrationId}, skipping update`);
+            return;
+        }
+
+        // 6. Update registration status to converted
+        await registrationRef.update({
+            status: 'converted',
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        console.log(`[CashfreeWebhook] Registration ${registrationId} marked as converted`);
+    } catch (error) {
+        console.error('[CashfreeWebhook] Error processing webhook async:', error);
+    }
+}
+
 export async function POST(req: NextRequest) {
     try {
         const rawBody = await req.text();
@@ -30,12 +137,6 @@ export async function POST(req: NextRequest) {
             .update(signatureString)
             .digest('base64');
 
-        console.log('[CashfreeWebhook] Signature verification:', {
-            timestamp,
-            signatureProvided: signature.substring(0, 20) + '...',
-            signatureComputed: computedSignature.substring(0, 20) + '...',
-        });
-
         if (computedSignature !== signature) {
             console.error('[CashfreeWebhook] Signature verification failed');
             return new Response('Invalid Signature', { status: 401 });
@@ -48,160 +149,27 @@ export async function POST(req: NextRequest) {
         const orderStatus = payload.data?.order?.order_status;
         const orderId = payload.data?.order?.order_id;
 
-        console.log('[CashfreeWebhook] Payment detection:', {
-            eventType,
-            orderStatus,
-            orderId,
-        });
-
         // Only process PAYMENT_SUCCESS_WEBHOOK events with PAID status
         if (eventType !== 'PAYMENT_SUCCESS_WEBHOOK' || orderStatus !== 'PAID' || !orderId) {
             console.log('[CashfreeWebhook] Webhook not a successful payment event, acknowledging');
             return new Response('OK', { status: 200 });
         }
 
-        console.log(`[CashfreeWebhook] Payment SUCCESS for order ${orderId}, processing...`);
+        console.log(`[CashfreeWebhook] Payment SUCCESS for order ${orderId}, processing asynchronously...`);
 
-        const db = getAdminFirestore();
+        // IMPORTANT: Process webhook asynchronously and return 200 immediately
+        // This prevents timeout issues and ensures Cashfree receives acknowledgment quickly
+        processWebhookAsync(orderId).catch((error) => {
+            console.error('[CashfreeWebhook] Async processing error:', error);
+        });
 
-        // 3. Idempotency Protection - Check if payment already processed
-        // Check payments collection first (as per requirement #3)
-        try {
-            const existingPaymentsSnapshot = await db
-                .collection('payments')
-                .where('cashfreeOrderId', '==', orderId)
-                .limit(1)
-                .get();
-
-            if (!existingPaymentsSnapshot.empty) {
-                const paymentData = existingPaymentsSnapshot.docs[0].data();
-                if (paymentData?.status === 'success') {
-                    console.log(`[CashfreeWebhook] Payment already processed for orderId: ${orderId}`);
-                    return new Response('Already processed', { status: 200 });
-                }
-            }
-        } catch (error) {
-            console.warn('[CashfreeWebhook] Error checking existing payments:', error);
-        }
-
-        // Also check onspotPayments collection
-        try {
-            const existingOnspotPaymentSnap = await db.collection('onspotPayments').doc(orderId).get();
-            if (existingOnspotPaymentSnap.exists) {
-                const onspotData = existingOnspotPaymentSnap.data();
-                if (onspotData?.status === 'success') {
-                    console.log(`[CashfreeWebhook] Onspot payment already processed for orderId: ${orderId}`);
-                    return new Response('Already processed', { status: 200 });
-                }
-            }
-        } catch (error) {
-            console.warn('[CashfreeWebhook] Error checking existing onspotPayments:', error);
-        }
-
-        // 4. Find registration by orderId
-        let registrationId: string | null = null;
-
-        // Strategy 1: Check onspotPayments collection (document ID = orderId)
-        try {
-            const onspotPaymentSnap = await db.collection('onspotPayments').doc(orderId).get();
-            if (onspotPaymentSnap.exists) {
-                const onspotData = onspotPaymentSnap.data();
-                registrationId = onspotData?.registrationId as string | undefined || null;
-                console.log(`[CashfreeWebhook] Found registrationId from onspotPayments: ${registrationId}`);
-            }
-        } catch (error) {
-            console.warn('[CashfreeWebhook] Error checking onspotPayments:', error);
-        }
-
-        // Strategy 2: Check payments collection (cashfreeOrderId field)
-        if (!registrationId) {
-            try {
-                const paymentsSnapshot = await db
-                    .collection('payments')
-                    .where('cashfreeOrderId', '==', orderId)
-                    .limit(1)
-                    .get();
-
-                if (!paymentsSnapshot.empty) {
-                    const paymentData = paymentsSnapshot.docs[0].data();
-                    registrationId = paymentData?.registrationId as string | undefined || null;
-                    console.log(`[CashfreeWebhook] Found registrationId from payments: ${registrationId}`);
-                }
-            } catch (error) {
-                console.warn('[CashfreeWebhook] Error checking payments:', error);
-            }
-        }
-
-        // Strategy 3: Extract from orderId format (admin_${registrationId}_${timestamp})
-        if (!registrationId && orderId.startsWith('admin_')) {
-            const parts = orderId.split('_');
-            if (parts.length >= 2) {
-                // Extract registrationId from format: admin_${registrationId}_${timestamp}
-                registrationId = parts[1];
-                console.log(`[CashfreeWebhook] Extracted registrationId from orderId format: ${registrationId}`);
-            }
-        }
-
-        // Strategy 4: Try direct lookup (fallback)
-        if (!registrationId) {
-            try {
-                const regSnap = await db.collection('registrations').doc(orderId).get();
-                if (regSnap.exists) {
-                    registrationId = orderId;
-                    console.log(`[CashfreeWebhook] Using orderId as registrationId (direct lookup): ${registrationId}`);
-                }
-            } catch (error) {
-                console.warn('[CashfreeWebhook] Error checking direct registration lookup:', error);
-            }
-        }
-
-        if (!registrationId) {
-            console.error(`[CashfreeWebhook] Registration not found for orderId: ${orderId}`);
-            // Return 200 to acknowledge receipt - Cashfree requires 200 for webhook acknowledgment
-            // Log error but don't fail the webhook to prevent retries
-            return new Response('OK', { status: 200 });
-        }
-
-        // 5. Idempotency check - verify registration exists and check current status
-        const registrationRef = db.collection('registrations').doc(registrationId);
-        const registrationSnap = await registrationRef.get();
-
-        if (!registrationSnap.exists) {
-            console.error(`[CashfreeWebhook] Registration document not found: ${registrationId}`);
-            // Return 200 to acknowledge receipt - Cashfree requires 200 for webhook acknowledgment
-            return new Response('OK', { status: 200 });
-        }
-
-        const currentStatus = registrationSnap.data()?.status;
-        console.log(`[CashfreeWebhook] Current registration status: ${currentStatus}`);
-
-        if (currentStatus === 'converted') {
-            console.log(`[CashfreeWebhook] Registration already converted: ${registrationId}, skipping update`);
-            return new Response('Already processed', { status: 200 });
-        }
-
-        // 6. Update registration status to converted
-        try {
-            await registrationRef.update({
-                status: 'converted',
-                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-            });
-
-            console.log(`[CashfreeWebhook] Registration ${registrationId} marked as converted`);
-        } catch (updateError) {
-            // Log error but still acknowledge webhook receipt
-            console.error(`[CashfreeWebhook] Failed to update registration ${registrationId}:`, updateError);
-            // Continue to return 200 to prevent Cashfree retries
-        }
-
-        // Always return 200 to acknowledge receipt - Cashfree requires 200 for webhook acknowledgment
-        // This prevents Cashfree from retrying and showing "fetch failed"
+        // Return 200 immediately to acknowledge receipt
+        // Cashfree requires 200 response within timeout window
         return new Response('OK', { status: 200 });
     } catch (error) {
         // Log error but still return 200 to acknowledge webhook receipt
         // Only return non-200 for signature verification failures (handled above)
         console.error('[CashfreeWebhook] Error handling webhook:', error);
-        // Return 200 to prevent Cashfree from retrying and showing "fetch failed"
         return new Response('OK', { status: 200 });
     }
 }

@@ -38,6 +38,8 @@ export async function POST(req: NextRequest) {
 
         const { orderId } = parsed.data;
 
+        console.log(`[VerifyOrder] Verifying payment for orderId: ${orderId}`);
+
         // Call the existing fix-stuck-payment logic to handle the verification and pass creation
         // This avoids code duplication and ensures the same logic is used for both manual fixes and automatic verification.
         const host = req.headers.get('host') || 'localhost:3000';
@@ -48,35 +50,68 @@ export async function POST(req: NextRequest) {
             baseUrl = baseUrl.replace('http://', 'https://');
         }
 
+        console.log(`[VerifyOrder] Using baseUrl: ${baseUrl}`);
+
         const authHeader = req.headers.get('Authorization') || '';
 
-        const verifyRes = await fetch(`${baseUrl}/api/fix-stuck-payment`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                Authorization: authHeader,
-            },
-            body: JSON.stringify({ orderId }),
-        });
+        let verifyRes: Response;
+        let verifyData: unknown;
+        
+        try {
+            verifyRes = await fetch(`${baseUrl}/api/fix-stuck-payment`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: authHeader,
+                },
+                body: JSON.stringify({ orderId }),
+            });
 
-        const verifyData = await verifyRes.json();
-        if (!verifyRes.ok) {
-            return Response.json(verifyData, { status: verifyRes.status });
+            // Try to parse JSON, but handle non-JSON responses gracefully
+            const text = await verifyRes.text();
+            try {
+                verifyData = JSON.parse(text);
+            } catch {
+                verifyData = { error: text || 'Unknown error', status: verifyRes.status };
+            }
+
+            if (!verifyRes.ok) {
+                return Response.json(
+                    { error: (verifyData as { error?: string }).error || 'Verification failed', details: verifyData },
+                    { status: verifyRes.status }
+                );
+            }
+        } catch (fetchError) {
+            console.error('[VerifyOrder] Fetch error:', fetchError);
+            return Response.json(
+                { error: 'Failed to verify payment', details: fetchError instanceof Error ? fetchError.message : 'Network error' },
+                { status: 500 }
+            );
         }
 
         // After successful verification, update the registration status to 'converted'
-        const db = getAdminFirestore();
-        const paymentSnap = await db.collection('onspotPayments').doc(orderId).get();
-        if (paymentSnap.exists) {
-            const { registrationId } = paymentSnap.data() as { registrationId?: string };
-            if (registrationId) {
-                await db.collection('registrations').doc(registrationId).update({
-                    status: 'converted',
-                    updatedAt: new Date(),
-                    statusUpdatedAt: new Date(),
-                    statusUpdatedBy: ctx.uid,
-                });
+        try {
+            const db = getAdminFirestore();
+            const paymentSnap = await db.collection('onspotPayments').doc(orderId).get();
+            if (paymentSnap.exists) {
+                const { registrationId } = paymentSnap.data() as { registrationId?: string };
+                if (registrationId) {
+                    await db.collection('registrations').doc(registrationId).update({
+                        status: 'converted',
+                        updatedAt: new Date(),
+                        statusUpdatedAt: new Date(),
+                        statusUpdatedBy: ctx.uid,
+                    });
+                    console.log(`[VerifyOrder] Updated registration ${registrationId} to converted`);
+                } else {
+                    console.warn(`[VerifyOrder] No registrationId found in onspotPayments for orderId: ${orderId}`);
+                }
+            } else {
+                console.warn(`[VerifyOrder] No onspotPayments document found for orderId: ${orderId}`);
             }
+        } catch (dbError) {
+            // Log but don't fail the request - payment verification succeeded
+            console.error('[VerifyOrder] Error updating registration status:', dbError);
         }
 
         return Response.json({

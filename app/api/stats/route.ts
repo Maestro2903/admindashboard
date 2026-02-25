@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
-import { requireOrganizer } from '@/lib/admin/requireOrganizer';
 import { getAdminFirestore } from '@/lib/firebase/adminApp';
-import type { OverviewStats, ActivityFeedItem } from '@/types/admin';
+import type { OverviewStats, ActivityFeedItem, AdminRole } from '@/types/admin';
+import { requireAdminRole, requireSuperAdmin } from '@/lib/admin/requireAdminRole';
 
 function toIso(value: unknown): string | null {
   if (!value) return null;
@@ -30,8 +30,9 @@ function getDayISTBounds(offsetDays = 0): { start: Date; end: Date } {
 
 export async function GET(req: NextRequest) {
   try {
-    const result = await requireOrganizer(req);
+    const result = await requireAdminRole(req);
     if (result instanceof Response) return result;
+    const adminRole: AdminRole = result.adminRole;
 
     const db = getAdminFirestore();
 
@@ -129,7 +130,7 @@ export async function GET(req: NextRequest) {
       if (date >= yesterdayStart && date <= yesterdayEnd) registrationsYesterday++;
     }
 
-    const stats: OverviewStats = {
+    const baseStats: OverviewStats = {
       totalSuccessfulPayments,
       revenue,
       activePasses,
@@ -141,6 +142,14 @@ export async function GET(req: NextRequest) {
       registrationsYesterday,
       passDistribution,
     };
+
+    // Only superadmins should see real revenue in the API.
+    const stats: OverviewStats = requireSuperAdmin(adminRole)
+      ? baseStats
+      : {
+          ...baseStats,
+          revenue: 0,
+        };
 
     // Activity feed: recent events (last 20)
     const activityItems: ActivityFeedItem[] = [];

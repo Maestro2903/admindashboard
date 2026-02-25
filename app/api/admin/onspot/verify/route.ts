@@ -1,7 +1,11 @@
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { getAdminFirestore } from '@/lib/firebase/adminApp';
-import { requireAdminRole, forbiddenRole } from '@/lib/admin/requireAdminRole';
+import {
+  requireAdminRole,
+  requireSuperAdmin,
+  forbiddenRole,
+} from '@/lib/admin/requireAdminRole';
 import { rateLimitAdmin, rateLimitResponse } from '@/lib/security/adminRateLimiter';
 
 const bodySchema = z.object({
@@ -15,7 +19,7 @@ export async function POST(req: NextRequest) {
     try {
         const result = await requireAdminRole(req);
         if (result instanceof Response) return result;
-        if (!['manager', 'editor', 'superadmin'].includes(result.adminRole)) return forbiddenRole();
+        if (!requireSuperAdmin(result.adminRole)) return forbiddenRole();
 
         let body: unknown;
         try {

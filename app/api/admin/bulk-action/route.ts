@@ -31,6 +31,10 @@ function canRunPassBulk(ctx: BulkContext): boolean {
   return canMutatePasses(ctx.adminRole);
 }
 
+function canRunTeamBulk(ctx: BulkContext): boolean {
+  return canMutateTeams(ctx.adminRole);
+}
+
 function canRunEventBulk(ctx: BulkContext): boolean {
   return canMutateUsersPaymentsEvents(ctx.adminRole);
 }
@@ -40,7 +44,8 @@ function canRunPaymentBulk(ctx: BulkContext): boolean {
 }
 
 function canRunSoftDelete(collection: string, ctx: BulkContext): boolean {
-  if (collection === 'passes' || collection === 'teams') return canMutatePasses(ctx.adminRole);
+  if (collection === 'passes') return canMutatePasses(ctx.adminRole);
+  if (collection === 'teams') return canMutateTeams(ctx.adminRole);
   if (collection === 'users' || collection === 'payments' || collection === 'events') {
     return canMutateUsersPaymentsEvents(ctx.adminRole);
   }
@@ -68,25 +73,38 @@ export async function POST(req: NextRequest) {
     }
     const { action, targetCollection, targetIds } = parse.data;
 
-    // Pass mutations (mark used, revert, soft delete, hard delete): any organizer can run these.
     const isPassBulkAction =
       targetCollection === 'passes' &&
       (action === 'markUsed' || action === 'revertUsed' || action === 'softDelete' || action === 'delete');
     const isTeamSoftDelete = targetCollection === 'teams' && action === 'softDelete';
     const isPaymentDelete = targetCollection === 'payments' && action === 'delete';
-    const allowWithoutRoleCheck = isPassBulkAction || isTeamSoftDelete;
 
-    if (allowWithoutRoleCheck) {
-      // Already allowed: requireOrganizer passed and we're only touching passes/teams.
-    } else if (isPaymentDelete) {
-      if (!canRunPaymentBulk(ctx)) return forbiddenRole();
-    } else if (action === 'forceVerifyPayment') {
+    if (isPassBulkAction && !canRunPassBulk(ctx)) {
+      return forbiddenRole();
+    }
+
+    if (isTeamSoftDelete && !canRunTeamBulk(ctx)) {
+      return forbiddenRole();
+    }
+
+    if (isPaymentDelete && !canRunPaymentBulk(ctx)) {
+      return forbiddenRole();
+    }
+
+    if (action === 'forceVerifyPayment') {
       if (targetCollection !== 'payments' || !canRunPaymentBulk(ctx)) return forbiddenRole();
     } else if (action === 'activateEvent' || action === 'deactivateEvent') {
       if (targetCollection !== 'events' || !canRunEventBulk(ctx)) return forbiddenRole();
     } else if (action === 'softDelete') {
       if (!canRunSoftDelete(targetCollection, ctx)) return forbiddenRole();
-    } else {
+    } else if (
+      !isPassBulkAction &&
+      !isTeamSoftDelete &&
+      !isPaymentDelete &&
+      action !== 'forceVerifyPayment' &&
+      action !== 'activateEvent' &&
+      action !== 'deactivateEvent'
+    ) {
       return forbiddenRole();
     }
 

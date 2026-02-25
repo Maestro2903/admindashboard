@@ -25,7 +25,7 @@ async function fetchJson<T>(url: string, token: string): Promise<T> {
 }
 
 function UnifiedViewClientInner() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, userData, loading: authLoading } = useAuth();
 
   const [events, setEvents] = React.useState<AdminEvent[]>([]);
   const [data, setData] = React.useState<UnifiedDashboardResponse | null>(null);
@@ -270,6 +270,7 @@ function UnifiedViewClientInner() {
           setRefreshKey((k) => k + 1);
         }}
         getToken={async () => (user ? user.getIdToken(false) : '')}
+        adminRole={userData?.adminRole}
       />
       <RowDetailModal
         record={detailRecord}
@@ -283,6 +284,7 @@ function UnifiedViewClientInner() {
         teamMembers={teamMembers ?? undefined}
         loadingTeam={loadingTeam}
         getToken={async () => (user ? user.getIdToken(false) : '')}
+        adminRole={userData?.adminRole}
       />
     </div>
   );

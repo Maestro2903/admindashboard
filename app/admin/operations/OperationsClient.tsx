@@ -676,6 +676,7 @@ function OperationsClientInner() {
         onClearSelection={() => setRowSelection({})}
         onSuccess={() => setRefreshKey((k) => k + 1)}
         getToken={async () => (user ? user.getIdToken(false) : '')}
+        adminRole={userData?.adminRole}
       />
 
       {/* Detail Drawer */}
@@ -688,6 +689,7 @@ function OperationsClientInner() {
           setRefreshKey((k) => k + 1);
         }}
         getToken={async () => (user ? user.getIdToken(false) : '')}
+        adminRole={userData?.adminRole}
       />
     </div>
   );

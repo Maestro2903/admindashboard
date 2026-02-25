@@ -64,7 +64,8 @@ This document describes the dashboard views, table structure, filtering, paginat
 
 ## Data Visibility Rules
 
-- **Financial view (amounts, orderId, paymentId):** Only when **superadmin**. GET /api/admin/unified-dashboard with `mode=financial` returns 403 for non-superadmin. Operations view (no amounts/orderIds) is visible to all organizers.
+- **Financial view (amounts, orderId, paymentId, total revenue):** Only when **superadmin**. GET /api/admin/unified-dashboard with `mode=financial` returns 403 for non-superadmin. Operations view (no amounts/orderIds) is visible to all organizers.
+- **Overview revenue / total registrations:** The `/api/stats` endpoint always requires organizer access, but only superadmins receive real `revenue` values. For viewer/manager roles, `revenue` is zeroed out and the corresponding cards are hidden in the UI.
 - **Audit logs:** Available to any organizer (or adminRole as implemented); logs are sanitized so sensitive fields are not stored (see below). Who did what and which collection/id are visible; sensitive field values are redacted.
 - **Payments list:** Organizer can see all payments (with optional includeArchived). No role-based filtering of rows; financial fields (amount, cashfreeOrderId) are present in the payments list for all organizers. (Financial *view* in the unified UI is superadmin-only; the raw payments API is organizer-scoped.)
 

@@ -1,8 +1,8 @@
 import { NextRequest } from 'next/server';
-import { requireOrganizer } from '@/lib/admin/requireOrganizer';
 import { getAdminFirestore } from '@/lib/firebase/adminApp';
 import { verifySignedQR } from '@/features/passes/qrService';
 import { rateLimitAdmin, rateLimitResponse } from '@/lib/security/adminRateLimiter';
+import { requireAdminRole, requireEditorOrAbove, forbiddenRole } from '@/lib/admin/requireAdminRole';
 
 function getString(rec: Record<string, unknown>, key: string): string | undefined {
   const v = rec[key];
@@ -15,8 +15,9 @@ export async function POST(req: NextRequest) {
   if (rl.limited) return rateLimitResponse(rl);
 
   try {
-    const result = await requireOrganizer(req);
+    const result = await requireAdminRole(req);
     if (result instanceof Response) return result;
+    if (!requireEditorOrAbove(result.adminRole)) return forbiddenRole();
 
     let body: unknown;
     try {

@@ -55,6 +55,7 @@ export function BulkActionBar({
   onSuccess,
   getToken,
   financialMode = false,
+  adminRole,
 }: {
   selectedCount: number;
   selectedPassIds: string[];
@@ -64,8 +65,13 @@ export function BulkActionBar({
   getToken: () => Promise<string>;
   /** When true, show Force verify payment and use paymentIds from selectedRecords (FinancialRecord[]) */
   financialMode?: boolean;
+  /** Server-derived admin role: viewer | manager | superadmin */
+  adminRole?: string | null;
 }) {
   const [loading, setLoading] = React.useState<string | null>(null);
+  const effectiveRole = (adminRole as string | undefined) ?? 'viewer';
+  const isEditorOrAbove = effectiveRole === 'manager' || effectiveRole === 'superadmin';
+  const isSuperAdmin = effectiveRole === 'superadmin';
 
   const runBulk = React.useCallback(
     async (action: string, body: { action: string; targetCollection: string; targetIds: string[] }) => {
@@ -104,7 +110,7 @@ export function BulkActionBar({
   );
 
   const handleForceVerifyPayment = () => {
-    if (!financialMode || selectedRecords.length === 0) return;
+    if (!financialMode || selectedRecords.length === 0 || !isSuperAdmin) return;
     const paymentIds = (selectedRecords as FinancialRecord[])
       .map((r) => ('paymentId' in r ? r.paymentId : ''))
       .filter(Boolean);
@@ -118,6 +124,7 @@ export function BulkActionBar({
   };
 
   const handleMarkUsed = () => {
+    if (!isEditorOrAbove) return;
     if (!window.confirm(`Mark ${selectedCount} pass(es) as used?`)) return;
     runBulk('markUsed', {
       action: 'markUsed',
@@ -127,6 +134,7 @@ export function BulkActionBar({
   };
 
   const handleRevertUsed = () => {
+    if (!isEditorOrAbove) return;
     if (!window.confirm(`Revert ${selectedCount} pass(es) to paid? This cannot be undone.`)) return;
     runBulk('revertUsed', {
       action: 'revertUsed',
@@ -136,6 +144,7 @@ export function BulkActionBar({
   };
 
   const handleSoftDelete = () => {
+    if (!isEditorOrAbove) return;
     if (!window.confirm(`Soft delete ${selectedCount} pass(es)? They will be archived.`)) return;
     runBulk('softDelete', {
       action: 'softDelete',
@@ -145,6 +154,7 @@ export function BulkActionBar({
   };
 
   const handleDeleteFromDb = () => {
+    if (!isEditorOrAbove) return;
     if (
       !window.confirm(
         `Permanently delete ${selectedCount} pass(es) from the database? This cannot be undone.`
@@ -181,7 +191,7 @@ export function BulkActionBar({
           size="sm"
           className="text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300 h-8 px-3 text-xs"
           onClick={handleMarkUsed}
-          disabled={!!loading}
+          disabled={!!loading || !isEditorOrAbove}
         >
           <IconCheck size={14} className="mr-1.5" />
           Mark used
@@ -192,7 +202,7 @@ export function BulkActionBar({
           size="sm"
           className="text-amber-400 hover:bg-amber-500/10 hover:text-amber-300 h-8 px-3 text-xs"
           onClick={handleRevertUsed}
-          disabled={!!loading}
+          disabled={!!loading || !isEditorOrAbove}
         >
           <IconArrowBackUp size={14} className="mr-1.5" />
           Revert to paid
@@ -204,7 +214,7 @@ export function BulkActionBar({
             size="sm"
             className="text-amber-400 hover:bg-amber-500/10 hover:text-amber-300 h-8 px-3 text-xs"
             onClick={handleForceVerifyPayment}
-            disabled={!!loading || selectedRecords.length === 0}
+            disabled={!!loading || selectedRecords.length === 0 || !isSuperAdmin}
           >
             <IconCurrencyRupee size={14} className="mr-1.5" />
             Force verify
@@ -230,7 +240,7 @@ export function BulkActionBar({
           size="sm"
           className="text-red-400 hover:bg-red-500/10 hover:text-red-300 h-8 px-3 text-xs"
           onClick={handleSoftDelete}
-          disabled={!!loading}
+          disabled={!!loading || !isEditorOrAbove}
         >
           <IconArchive size={14} className="mr-1.5" />
           Archive
@@ -241,7 +251,7 @@ export function BulkActionBar({
           size="sm"
           className="text-red-400 hover:bg-red-500/10 hover:text-red-300 h-8 px-3 text-xs"
           onClick={handleDeleteFromDb}
-          disabled={!!loading}
+          disabled={!!loading || !isEditorOrAbove}
         >
           <IconTrash size={14} className="mr-1.5" />
           Delete

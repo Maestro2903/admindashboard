@@ -38,7 +38,7 @@ function playBeep(freq: number) {
 }
 
 export default function LiveCheckinPage() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, userData, loading: authLoading } = useAuth();
   const [result, setResult] = React.useState<ScanResult>('idle');
   const [scanData, setScanData] = React.useState<ScanResponse>({});
   const [loading, setLoading] = React.useState(false);
@@ -132,10 +132,24 @@ export default function LiveCheckinPage() {
     return () => document.removeEventListener('fullscreenchange', handler);
   }, []);
 
-  if (authLoading || !user) {
+  if (authLoading || !user || !userData) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <div className="h-5 w-5 animate-spin rounded-full border-2 border-zinc-700 border-t-zinc-400" />
+      </div>
+    );
+  }
+
+  const role = userData.adminRole;
+  const canScan = role === 'manager' || role === 'superadmin';
+
+  if (!canScan) {
+    return (
+      <div className="flex min-h-[60vh] flex-col items-center justify-center space-y-3">
+        <h1 className="text-xl font-semibold text-white">Access denied</h1>
+        <p className="text-sm text-zinc-500">
+          Only editors and superadmins can use the live check-in scanner.
+        </p>
       </div>
     );
   }

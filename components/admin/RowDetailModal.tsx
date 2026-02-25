@@ -190,6 +190,9 @@ function ModalActions({
   onForceVerify,
   onViewQr,
   onDeleteClick,
+  canMutatePass,
+  canForceVerify,
+  canDelete,
 }: {
   record: RowDetailRecord;
   actionLoading: string | null;
@@ -199,13 +202,16 @@ function ModalActions({
   onForceVerify: () => void;
   onViewQr: () => void;
   onDeleteClick: () => void;
+  canMutatePass: boolean;
+  canForceVerify: boolean;
+  canDelete: boolean;
 }) {
   return (
     <div className="border-t border-zinc-800 px-6 py-4 space-y-3">
       <div className="flex gap-2">
         <button
           onClick={onMarkUsed}
-          disabled={!!actionLoading}
+          disabled={!!actionLoading || !canMutatePass}
           className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-emerald-500/15 px-3 py-2.5 text-sm font-medium text-emerald-400 transition-all duration-150 hover:bg-emerald-500/25 disabled:opacity-40"
         >
           <IconCircleCheckFilled size={16} />
@@ -213,7 +219,7 @@ function ModalActions({
         </button>
         <button
           onClick={onRevertUsed}
-          disabled={!!actionLoading}
+          disabled={!!actionLoading || !canMutatePass}
           className="flex-1 flex items-center justify-center gap-2 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2.5 text-sm font-medium text-zinc-300 transition-all duration-150 hover:bg-zinc-700 disabled:opacity-40"
         >
           <IconRotate size={16} />
@@ -223,7 +229,7 @@ function ModalActions({
       <div className="flex gap-2">
         <button
           onClick={onForceVerify}
-          disabled={!!actionLoading}
+          disabled={!!actionLoading || !canForceVerify}
           className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-400 transition-all duration-150 hover:bg-amber-500/20 disabled:opacity-40"
         >
           <IconShieldCheck size={15} />
@@ -239,7 +245,7 @@ function ModalActions({
         </button>
         <button
           onClick={onDeleteClick}
-          disabled={!!actionLoading}
+          disabled={!!actionLoading || !canDelete}
           className="flex items-center justify-center gap-2 rounded-lg bg-red-500/10 px-3 py-2 text-xs font-medium text-red-400 transition-all duration-150 hover:bg-red-500/20 disabled:opacity-40"
         >
           <IconTrash size={15} />
@@ -311,6 +317,7 @@ export function RowDetailModal({
   onClose,
   onUpdated,
   getToken,
+  adminRole,
 }: {
   record: RowDetailRecord | null;
   open: boolean;
@@ -319,6 +326,8 @@ export function RowDetailModal({
   teamMembers?: TeamMemberRow[] | null;
   loadingTeam?: boolean;
   getToken: () => Promise<string>;
+  /** Viewer / manager / superadmin string from server */
+  adminRole?: string | null;
 }) {
   const [actionLoading, setActionLoading] = React.useState<string | null>(null);
   const [qrImageUrl, setQrImageUrl] = React.useState<string | null>(null);
@@ -326,9 +335,15 @@ export function RowDetailModal({
   const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false);
   const drawerRef = React.useRef<HTMLDivElement>(null);
 
+  const effectiveRole = (adminRole as string | undefined) ?? 'viewer';
+  const canMutatePass = effectiveRole === 'manager' || effectiveRole === 'superadmin';
+  const canForceVerify = effectiveRole === 'superadmin';
+  const canDelete = canMutatePass;
+
   // ---- Actions ----
   const handleMarkUsed = React.useCallback(async () => {
     if (!record?.passId) return;
+    if (!canMutatePass) return;
     setActionLoading('markUsed');
     try {
       const token = await getToken();
@@ -347,6 +362,7 @@ export function RowDetailModal({
 
   const handleRevertUsed = React.useCallback(async () => {
     if (!record?.passId) return;
+    if (!canMutatePass) return;
     setActionLoading('revertUsed');
     try {
       const token = await getToken();
@@ -365,6 +381,7 @@ export function RowDetailModal({
 
   const handleForceVerify = React.useCallback(async () => {
     if (!record?.passId) return;
+    if (!canForceVerify) return;
     setActionLoading('fixPayment');
     try {
       const token = await getToken();
@@ -397,6 +414,7 @@ export function RowDetailModal({
 
   const handleDeletePass = React.useCallback(async () => {
     if (!record?.passId) return;
+    if (!canDelete) return;
     setActionLoading('delete');
     try {
       const token = await getToken();
@@ -483,6 +501,9 @@ export function RowDetailModal({
           onForceVerify={handleForceVerify}
           onViewQr={handleViewQr}
           onDeleteClick={() => setShowDeleteConfirm(true)}
+          canMutatePass={canMutatePass}
+          canForceVerify={canForceVerify}
+          canDelete={canDelete}
         />
       </div>
       <DeleteConfirmModal

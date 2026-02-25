@@ -170,7 +170,7 @@ All admin layouts found are **metadata/pass-through** wrappers (no auth logic in
 - **Data source**:
   - `POST /api/admin/scan-verify` (verifies a scanned pass payload or raw input)
 - **Auth + role validation**:
-  - Server: `POST /api/admin/scan-verify` → `rateLimitAdmin('scan')` + `requireOrganizer(req)`
+  - Server: `POST /api/admin/scan-verify` → `rateLimitAdmin('scan')` + `requireAdminRole(req)` and requires `adminRole ∈ {manager, superadmin}` (viewer is read-only and cannot scan).
 
 ### `/admin/audit-logs` (Admin logs)
 

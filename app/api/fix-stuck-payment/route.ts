@@ -62,10 +62,20 @@ export async function POST(req: NextRequest) {
     }
 
     const db = getAdminFirestore();
-    const { orderId } = await req.json();
-    console.log(`[FixPayment] Manual fix or webhook requested for: ${orderId} by: ${organizerUid}`);
+    const body = await req.json().catch((err) => {
+      console.error('[FixPayment] Invalid JSON body:', err);
+      return null;
+    });
 
-    if (!orderId || typeof orderId !== 'string') {
+    const orderId =
+      body && typeof body.orderId === 'string' ? body.orderId.trim() : '';
+
+    console.log(
+      `[FixPayment] Manual fix or webhook requested for: ${orderId || '<empty>'} by: ${organizerUid}`
+    );
+
+    if (!orderId) {
+      console.error('[FixPayment] Invalid or missing orderId', { orderId });
       return NextResponse.json({ error: 'Missing orderId' }, { status: 400 });
     }
 
@@ -129,7 +139,67 @@ export async function POST(req: NextRequest) {
     }
 
     const paymentDoc = paymentsSnapshot.docs[0];
-    const paymentData = paymentDoc.data();
+    const paymentData = paymentDoc.data() as Record<string, unknown>;
+
+    const paymentDocId = paymentDoc.id;
+    if (!paymentDocId || typeof paymentDocId !== 'string') {
+      console.error('[FixPayment] Invalid payment document id', {
+        orderId,
+        paymentDocId,
+      });
+      return NextResponse.json(
+        { error: 'Invalid payment record id', orderId },
+        { status: 500 }
+      );
+    }
+
+    const userId =
+      typeof paymentData.userId === 'string' && paymentData.userId.trim()
+        ? paymentData.userId.trim()
+        : undefined;
+    const passType =
+      typeof paymentData.passType === 'string' && paymentData.passType.trim()
+        ? paymentData.passType.trim()
+        : undefined;
+    const amount =
+      typeof paymentData.amount === 'number' ? paymentData.amount : undefined;
+    const teamId =
+      typeof paymentData.teamId === 'string' && paymentData.teamId.trim()
+        ? paymentData.teamId.trim()
+        : undefined;
+
+    if (!userId) {
+      console.error('[FixPayment] Invalid userId in payment record', {
+        orderId,
+        paymentDocId,
+      });
+      return NextResponse.json(
+        { error: 'Invalid userId in payment record', orderId },
+        { status: 500 }
+      );
+    }
+
+    if (!passType) {
+      console.error('[FixPayment] Invalid passType in payment record', {
+        orderId,
+        paymentDocId,
+      });
+      return NextResponse.json(
+        { error: 'Invalid passType in payment record', orderId },
+        { status: 500 }
+      );
+    }
+
+    if (amount === undefined) {
+      console.error('[FixPayment] Invalid amount in payment record', {
+        orderId,
+        paymentDocId,
+      });
+      return NextResponse.json(
+        { error: 'Invalid amount in payment record', orderId },
+        { status: 500 }
+      );
+    }
 
     if (paymentData.status !== 'success') {
       await paymentDoc.ref.update({
@@ -159,7 +229,7 @@ export async function POST(req: NextRequest) {
           updatedAt: new Date(),
         });
       }
-      void rebuildAdminDashboardForUser(paymentData.userId).catch((err) =>
+      void rebuildAdminDashboardForUser(userId).catch((err) =>
         console.error('[FixPayment] rebuildAdminDashboard error:', err)
       );
       return NextResponse.json({
@@ -173,13 +243,13 @@ export async function POST(req: NextRequest) {
     const { eventIds: resolvedEventIds, eventCategory, eventType } = await resolveEventIdsAndMeta(db, paymentData);
 
     const passRef = db.collection('passes').doc();
-    const qrData = createQRPayload(passRef.id, paymentData.userId, paymentData.passType);
+    const qrData = createQRPayload(passRef.id, userId, passType);
     const qrCodeUrl = await QRCode.toDataURL(qrData);
 
     const passData: Record<string, unknown> = {
-      userId: paymentData.userId,
-      passType: paymentData.passType,
-      amount: paymentData.amount,
+      userId,
+      passType,
+      amount,
       paymentId: orderId,
       status: 'paid',
       qrCode: qrCodeUrl,
@@ -193,12 +263,12 @@ export async function POST(req: NextRequest) {
       if (eventType) passData.eventType = eventType;
     }
 
-    if (paymentData.passType === 'group_events' && paymentData.teamId) {
+    if (passType === 'group_events' && teamId) {
       try {
-        const teamDoc = await db.collection('teams').doc(paymentData.teamId).get();
+        const teamDoc = await db.collection('teams').doc(teamId).get();
         if (teamDoc.exists) {
           const teamData = teamDoc.data();
-          passData.teamId = paymentData.teamId;
+          passData.teamId = teamId;
           const teamSnapshot: Record<string, unknown> = {
             teamName: teamData?.teamName || '',
             totalMembers: teamData?.members?.length || 0,
@@ -219,7 +289,7 @@ export async function POST(req: NextRequest) {
             updatedAt: new Date(),
           };
           if (resolvedEventIds.length > 0) teamUpdate.eventIds = resolvedEventIds;
-          await db.collection('teams').doc(paymentData.teamId).update(teamUpdate);
+          await db.collection('teams').doc(teamId).update(teamUpdate);
         }
       } catch (teamError) {
         console.error('[FixPayment] Error fetching team:', teamError);
@@ -237,18 +307,18 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    void rebuildAdminDashboardForUser(paymentData.userId).catch((err) =>
+    void rebuildAdminDashboardForUser(userId).catch((err) =>
       console.error('[FixPayment] rebuildAdminDashboard error:', err)
     );
 
-    const recipientUserDoc = await db.collection('users').doc(paymentData.userId as string).get();
+    const recipientUserDoc = await db.collection('users').doc(userId).get();
     const userData = recipientUserDoc.data();
 
     if (userData?.email) {
       const emailTemplate = emailTemplates.passConfirmation({
         name: userData.name ?? 'there',
-        amount: paymentData.amount,
-        passType: paymentData.passType,
+        amount,
+        passType,
         college: userData.college ?? '-',
         phone: userData.phone ?? '-',
         qrCodeUrl,
@@ -256,8 +326,8 @@ export async function POST(req: NextRequest) {
 
       try {
         const pdfBuffer = await generatePassPDFBuffer({
-          passType: paymentData.passType,
-          amount: paymentData.amount,
+          passType,
+          amount,
           userName: userData.name ?? 'User',
           email: userData.email,
           phone: userData.phone ?? '-',
@@ -273,7 +343,7 @@ export async function POST(req: NextRequest) {
           html: emailTemplate.html,
           attachments: [
             {
-              filename: `takshashila-pass-${paymentData.passType}.pdf`,
+              filename: `takshashila-pass-${passType}.pdf`,
               content: pdfBuffer,
             },
           ],
@@ -290,9 +360,9 @@ export async function POST(req: NextRequest) {
       qrCode: qrCodeUrl,
       details: {
         orderId,
-        userId: paymentData.userId,
-        passType: paymentData.passType,
-        amount: paymentData.amount,
+        userId,
+        passType,
+        amount,
       },
     });
   } catch (error: unknown) {

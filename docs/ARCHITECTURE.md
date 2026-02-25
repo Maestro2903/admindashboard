@@ -102,11 +102,11 @@ Token refresh is handled on the client (e.g. `useMeRole` retries with a fresh to
 ## Authorization Model
 
 - **Organizer:** After token verification, the server reads `users/{uid}` and requires `isOrganizer === true`. If not, responds with 403 "Organizer access required".
-- **Admin roles:** Stored in `users/{uid}.adminRole`: `viewer` | `manager` | `superadmin`. Default in code when the field is missing: **manager** (`lib/admin/requireAdminRole.ts`).
+- **Admin roles:** Stored in `users/{uid}.adminRole`: `viewer` | `manager` | `superadmin`. Default in code when the field is missing: **viewer** (`lib/admin/adminRoles.ts`).
 - **Capabilities:**
-  - **viewer:** Read-only; cannot mutate passes, teams, users, payments, or events.
-  - **manager:** Can mutate passes (mark used, revert, soft delete, update-pass) and teams (update-team, bulk team actions).
-  - **superadmin:** Can mutate users, payments, and events; can access the financial view (amounts, order IDs) and run all bulk actions (including payment/user/event).
+  - **viewer (Viewer):** Read-only; cannot mutate passes, teams, users, payments, or events.
+  - **manager (Editor):** Can mutate passes (mark used, revert, soft delete, update-pass) and teams (update-team, bulk team actions).
+  - **superadmin (Super Admin):** Can mutate users, payments, and events; can access the financial view (amounts, order IDs, total revenue) and run all bulk actions (including payment/user/event and reconciliation flows).
 
 Helpers in `requireAdminRole.ts`: `canMutatePasses(role)`, `canMutateTeams(role)`, `canMutateUsersPaymentsEvents(role)`; routes call these and return 403 via `forbiddenRole()` when the role is insufficient.
 

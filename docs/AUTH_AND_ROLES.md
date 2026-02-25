@@ -31,22 +31,23 @@ For routes that need a role (e.g. mutations or financial view), the server uses 
 
 1. It first runs **requireOrganizer** (token + isOrganizer).
 2. It reads `users/{uid}.adminRole`.
-3. It normalizes the value to one of: **viewer**, **manager**, **superadmin**. If the field is missing or invalid, the default in code is **manager** (see `lib/admin/requireAdminRole.ts`).
+3. It normalizes the value to one of: **viewer**, **manager**, **superadmin**. If the field is missing or invalid, the default in code is **viewer** (safe read-only default; see `lib/admin/adminRoles.ts`).
 
 Role is then attached to the request context and used to gate actions and visibility.
 
 ## Capability Matrix
 
-| Capability | viewer | manager | superadmin |
-|------------|--------|---------|-------------|
+| Capability | viewer (Viewer) | manager (Editor) | superadmin (Super Admin) |
+|------------|-----------------|------------------|---------------------------|
 | Read dashboard, passes, payments, users, teams, events, logs | Yes | Yes | Yes |
 | Mutate passes (mark used, revert, soft delete, update-pass, delete pass) | No | Yes | Yes |
 | Mutate teams (update-team, bulk team actions) | No | Yes | Yes |
 | Mutate users (update-user) | No | No | Yes |
-| Mutate payments (update-payment) | No | No | Yes |
+| Mutate payments (update-payment, reconciliation flows) | No | No | Yes |
 | Mutate events (update-event) | No | No | Yes |
+| Bulk actions on passes/teams | No | Yes | Yes |
 | Bulk actions on payments/users/events | No | No | Yes |
-| Financial view (amounts, order IDs) | No | No | Yes |
+| Financial view (amounts, order IDs, total revenue) | No | No | Yes |
 
 Helper functions in `lib/admin/requireAdminRole.ts`:
 

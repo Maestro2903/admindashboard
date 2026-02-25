@@ -43,26 +43,47 @@ export async function POST(req: NextRequest) {
         // Call the existing fix-stuck-payment logic to handle the verification and pass creation
         // This avoids code duplication and ensures the same logic is used for both manual fixes and automatic verification.
         const host = req.headers.get('host') || 'localhost:3000';
-        const protocol = host.includes('localhost') ? 'http' : 'https';
-        
-        // Prefer APP_URL, then NEXT_PUBLIC_BASE_URL, then VERCEL_URL (if available), then construct from host
-        let baseUrl = process.env.APP_URL || process.env.NEXT_PUBLIC_BASE_URL;
-        if (!baseUrl && process.env.VERCEL_URL) {
-            baseUrl = `https://${process.env.VERCEL_URL}`;
-        }
-        if (!baseUrl) {
+        const isLocalhost = host.includes('localhost') || host.startsWith('127.0.0.1');
+        const protocol = isLocalhost ? 'http' : 'https';
+
+        let baseUrl: string;
+
+        if (isLocalhost) {
+            // In local/dev, always trust the actual host header (correct port),
+            // and ignore APP_URL / NEXT_PUBLIC_BASE_URL which are often set to production.
             baseUrl = `${protocol}://${host}`;
+        } else {
+            // In non-local environments, prefer explicit env, then VERCEL_URL, then host.
+            baseUrl = process.env.APP_URL || process.env.NEXT_PUBLIC_BASE_URL || '';
+            if (!baseUrl && process.env.VERCEL_URL) {
+                baseUrl = `https://${process.env.VERCEL_URL}`;
+            }
+            if (!baseUrl) {
+                baseUrl = `${protocol}://${host}`;
+            }
         }
-        
+
         // Remove trailing slash if present
         baseUrl = baseUrl.replace(/\/$/, '');
-        
-        // Enforce HTTPS in production environments to avoid 308 redirects that drop Authorization headers
-        if (baseUrl.startsWith('http://') && !baseUrl.includes('localhost')) {
+
+        // Enforce HTTPS in production-like environments to avoid 308 redirects that drop Authorization headers
+        if (!isLocalhost && baseUrl.startsWith('http://')) {
             baseUrl = baseUrl.replace('http://', 'https://');
         }
 
-        console.log(`[VerifyOrder] Using baseUrl: ${baseUrl} (from ${process.env.APP_URL ? 'APP_URL' : process.env.NEXT_PUBLIC_BASE_URL ? 'NEXT_PUBLIC_BASE_URL' : process.env.VERCEL_URL ? 'VERCEL_URL' : 'host header'})`);
+        console.log(
+            `[VerifyOrder] Using baseUrl: ${baseUrl} (envSource=${
+                isLocalhost
+                    ? 'localhost-host-header'
+                    : process.env.APP_URL
+                        ? 'APP_URL'
+                        : process.env.NEXT_PUBLIC_BASE_URL
+                            ? 'NEXT_PUBLIC_BASE_URL'
+                            : process.env.VERCEL_URL
+                                ? 'VERCEL_URL'
+                                : 'host header'
+            })`
+        );
 
         const authHeader = req.headers.get('Authorization') || '';
 

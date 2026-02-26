@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { getAdminFirestore } from '@/lib/firebase/adminApp';
 import { requireAdminRole, forbiddenRole } from '@/lib/admin/requireAdminRole';
 import { rateLimitAdmin, rateLimitResponse } from '@/lib/security/adminRateLimiter';
+import { CASHFREE_BASE_URL, CASHFREE_API_VERSION, getCashfreeOrderHeaders } from '@/lib/cashfree/config';
 
 const GROUP_EVENTS_PRICE_PER_PERSON = 250;
 
@@ -32,10 +33,6 @@ const bodySchema = z.object({
     amount: z.number().positive().optional(),
     pricePerPerson: z.number().positive().optional(),
 });
-
-const CASHFREE_BASE = process.env.NEXT_PUBLIC_CASHFREE_ENV === 'production'
-    ? 'https://api.cashfree.com/pg'
-    : 'https://sandbox.cashfree.com/pg';
 
 export async function POST(req: NextRequest) {
     const rl = await rateLimitAdmin(req, 'mutation');
@@ -210,18 +207,22 @@ export async function POST(req: NextRequest) {
             }
         };
 
-        const response = await fetch(`${CASHFREE_BASE}/orders`, {
+        const response = await fetch(`${CASHFREE_BASE_URL}/orders`, {
             method: 'POST',
-            headers: {
-                'x-client-id': appId,
-                'x-client-secret': secret,
-                'x-api-version': '2025-01-01',
-                'Content-Type': 'application/json'
-            },
+            headers: getCashfreeOrderHeaders(appId, secret),
             body: JSON.stringify(cfPayload)
         });
 
         const data = await response.json();
+
+        // Diagnostic log (no secrets): confirm env and API version in server logs
+        console.info('[OnSpotCreateOrder] Cashfree request', {
+            base: CASHFREE_BASE_URL,
+            xApiVersion: CASHFREE_API_VERSION,
+            orderId,
+            status: response.status,
+            cfCode: data?.code ?? null
+        });
 
         if (!response.ok) {
             console.error('[OnSpotCreateOrder] Cashfree Error:', data);
@@ -234,7 +235,12 @@ export async function POST(req: NextRequest) {
                 : `Cashfree Error: ${message}`;
             return Response.json({
                 error: userMessage,
-                details: data
+                details: data,
+                _debug: isAccountNotEnabled ? {
+                    hint: 'Redeploy the app so x-api-version is 2025-01-01. If using production, enable Payment Gateway / Transactions in Cashfree Dashboard, or test with Sandbox.',
+                    cashfreeBase: CASHFREE_BASE_URL,
+                    xApiVersion: CASHFREE_API_VERSION
+                } : undefined
             }, { status: 502 });
         }
 

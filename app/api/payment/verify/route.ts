@@ -8,11 +8,6 @@ const bodySchema = z.object({
     orderId: z.string().min(1),
 });
 
-const CASHFREE_BASE =
-    process.env.NEXT_PUBLIC_CASHFREE_ENV === 'production'
-        ? 'https://api.cashfree.com/pg'
-        : 'https://sandbox.cashfree.com/pg';
-
 export async function POST(req: NextRequest) {
     const rl = await rateLimitAdmin(req, 'mutation');
     if (rl.limited) return rateLimitResponse(rl);

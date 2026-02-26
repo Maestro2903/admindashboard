@@ -7,6 +7,7 @@ import { createQRPayload } from '@/features/passes/qrService';
 import { sendEmail, emailTemplates } from '@/features/email/emailService';
 import { generatePassPDFBuffer } from '@/features/passes/pdfGenerator.server';
 import { checkRateLimit } from '@/lib/security/rateLimiter';
+import { CASHFREE_BASE_URL, getCashfreeOrderHeaders } from '@/lib/cashfree/config';
 
 /** Resolve eventIds from payment or from events that allow this passType. Returns eventIds and first event's category/type. */
 async function resolveEventIdsAndMeta(
@@ -41,11 +42,6 @@ async function resolveEventIdsAndMeta(
     eventType: typeof d?.type === 'string' ? d.type : undefined,
   };
 }
-
-const CASHFREE_BASE =
-  process.env.NEXT_PUBLIC_CASHFREE_ENV === 'production'
-    ? 'https://api.cashfree.com/pg'
-    : 'https://sandbox.cashfree.com/pg';
 
 export async function POST(req: NextRequest) {
   const rateLimitResponse = await checkRateLimit(req, { limit: 3, windowMs: 60000 });
@@ -87,12 +83,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Payment not configured' }, { status: 500 });
     }
 
-    const response = await fetch(`${CASHFREE_BASE}/orders/${orderId}`, {
-      headers: {
-        'x-client-id': appId,
-        'x-client-secret': secret,
-        'x-api-version': '2025-01-01',
-      },
+    const response = await fetch(`${CASHFREE_BASE_URL}/orders/${orderId}`, {
+      headers: getCashfreeOrderHeaders(appId, secret),
     });
 
     if (!response.ok) {

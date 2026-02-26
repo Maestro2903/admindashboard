@@ -9,7 +9,12 @@ This document describes how payments are handled **in this Admin Dashboard appli
 
 ## Cashfree Usage in This Repo
 
-Cashfree is used only in **one place:** `app/api/fix-stuck-payment/route.ts`.
+Cashfree is used in:
+
+- **Fix stuck payment:** `app/api/fix-stuck-payment/route.ts` (GET order status).
+- **Create orders:** `app/api/admin/onspot/create-order/route.ts`, `app/api/admin/create-registration-order/route.ts`, `app/api/payment/create-order/route.ts` (POST /orders).
+
+All order APIs use **x-api-version: 2025-01-01** and the base URL from `NEXT_PUBLIC_CASHFREE_ENV` (production → `https://api.cashfree.com/pg`, otherwise sandbox).
 
 **Environment variables:**
 
@@ -66,6 +71,17 @@ The route calls the Cashfree **Orders API** (`GET /orders/{order_id}`) with head
 | Other server error (e.g. QR_SECRET_KEY missing during pass creation) | 500 | `{ error: "...", details? }` |
 
 QR generation uses `QR_SECRET_KEY` in `features/passes/qrService.ts` (`createQRPayload`). If it is not set, pass creation can throw and the request returns 500. Resend/PDF failures are logged and do not change the HTTP status if the pass was already written.
+
+## Troubleshooting: "transactions are not enabled for your payment gateway account"
+
+When **creating an order** (on-spot, manual registration, or payment create-order), Cashfree may return **400** with `order_create_failed` and message "transactions are not enabled for your payment gateway account". Checklist:
+
+1. **Confirm API version:** The app sends `x-api-version: 2025-01-01`. After a deploy, check server logs for `[OnSpotCreateOrder] Cashfree request` — it will show `xApiVersion` and `base` (sandbox vs production URL). If you see an old version, redeploy so the latest code is live.
+2. **Credentials and environment:** Use **sandbox** App ID and Secret with sandbox base URL (do not set `NEXT_PUBLIC_CASHFREE_ENV=production`). Use **production** App ID and Secret only with production base URL (`NEXT_PUBLIC_CASHFREE_ENV=production`). Mismatched env and credentials can trigger this error.
+3. **Cashfree Dashboard:** In [Cashfree Merchant Dashboard](https://merchant.cashfree.com/) → your app → ensure **Payment Gateway (PG)** / **Transactions** are enabled for that app. Some accounts have only "Payment Links" enabled; our flow uses the **Orders API** (PG), so the app must have PG/transactions enabled. For production, complete any required KYC/activation.
+4. **Test with Sandbox:** Set `NEXT_PUBLIC_CASHFREE_ENV` to something other than `production` (or leave unset), use sandbox App ID and Secret, and create an order. If sandbox works and production does not, the production Cashfree app likely needs transactions enabled or activation in the dashboard.
+
+The on-spot create-order API returns a `_debug` object in the error response when this error occurs, with `cashfreeBase` and `xApiVersion` so you can verify what the running deployment is using.
 
 ## Related Endpoints
 

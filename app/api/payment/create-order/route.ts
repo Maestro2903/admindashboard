@@ -3,16 +3,12 @@ import { z } from 'zod';
 import { getAdminFirestore } from '@/lib/firebase/adminApp';
 import { requireOrganizer } from '@/lib/admin/requireOrganizer';
 import { rateLimitAdmin, rateLimitResponse } from '@/lib/security/adminRateLimiter';
+import { CASHFREE_BASE_URL, getCashfreeOrderHeaders } from '@/lib/cashfree/config';
 
 const bodySchema = z.object({
     registrationId: z.string().min(1),
     notes: z.string().max(1000).optional(),
 });
-
-const CASHFREE_BASE =
-    process.env.NEXT_PUBLIC_CASHFREE_ENV === 'production'
-        ? 'https://api.cashfree.com/pg'
-        : 'https://sandbox.cashfree.com/pg';
 
 export async function POST(req: NextRequest) {
     const rl = await rateLimitAdmin(req, 'mutation');
@@ -141,14 +137,9 @@ export async function POST(req: NextRequest) {
 
         console.log('[CreateOrder] Final Payload:', JSON.stringify(orderPayload, null, 2));
 
-        const cfResponse = await fetch(`${CASHFREE_BASE}/orders`, {
+        const cfResponse = await fetch(`${CASHFREE_BASE_URL}/orders`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'x-client-id': appId,
-                'x-client-secret': secret,
-                'x-api-version': '2025-01-01',
-            },
+            headers: getCashfreeOrderHeaders(appId, secret),
             body: JSON.stringify(orderPayload),
         });
 

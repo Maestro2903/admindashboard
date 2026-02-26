@@ -215,7 +215,7 @@ export async function POST(req: NextRequest) {
             headers: {
                 'x-client-id': appId,
                 'x-client-secret': secret,
-                'x-api-version': '2023-08-01',
+                'x-api-version': '2025-01-01',
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify(cfPayload)
@@ -225,8 +225,15 @@ export async function POST(req: NextRequest) {
 
         if (!response.ok) {
             console.error('[OnSpotCreateOrder] Cashfree Error:', data);
+            const message = data?.message || 'Failed to create order';
+            const isAccountNotEnabled =
+                data?.code === 'order_create_failed' &&
+                /transactions are not enabled/i.test(String(message));
+            const userMessage = isAccountNotEnabled
+                ? 'Cashfree account does not have transactions enabled. Enable payments in Cashfree Dashboard (Sandbox/Production) or complete merchant onboarding, then try again.'
+                : `Cashfree Error: ${message}`;
             return Response.json({
-                error: `Cashfree Error: ${data.message || 'Failed to create order'}`,
+                error: userMessage,
                 details: data
             }, { status: 502 });
         }

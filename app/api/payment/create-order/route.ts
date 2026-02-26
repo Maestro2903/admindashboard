@@ -147,7 +147,7 @@ export async function POST(req: NextRequest) {
                 'Content-Type': 'application/json',
                 'x-client-id': appId,
                 'x-client-secret': secret,
-                'x-api-version': '2023-08-01',
+                'x-api-version': '2025-01-01',
             },
             body: JSON.stringify(orderPayload),
         });

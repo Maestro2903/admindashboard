@@ -140,6 +140,9 @@ function OperationsClientInner() {
   const { user, userData, loading: authLoading } = useAuth();
   const searchParams = useSearchParams();
 
+  const adminRole = (userData?.adminRole as string | undefined) ?? 'viewer';
+  const isSuperAdmin = adminRole === 'superadmin';
+
   const [events, setEvents] = React.useState<AdminEvent[]>([]);
   const [data, setData] = React.useState<OperationsDashboardResponse | null>(null);
   const [loading, setLoading] = React.useState(false);
@@ -346,6 +349,25 @@ function OperationsClientInner() {
   const canPrev = cursorStack.length > 0;
   const hasNext = Boolean(data?.nextCursor);
   const pageNum = cursorStack.length + 1;
+
+  if (authLoading || !user) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <div className="h-5 w-5 animate-spin rounded-full border-2 border-zinc-700 border-t-zinc-400" />
+      </div>
+    );
+  }
+
+  if (!isSuperAdmin) {
+    return (
+      <div className="flex min-h-[60vh] flex-col items-center justify-center space-y-3">
+        <h1 className="text-xl font-semibold text-white">Access denied</h1>
+        <p className="text-sm text-zinc-500">
+          Only superadmins can access the Operations view.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 fade-in">

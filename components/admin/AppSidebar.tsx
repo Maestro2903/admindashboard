@@ -44,16 +44,22 @@ export function AppSidebar({
   const pathname = usePathname();
 
   const visibleItems = NAV_ITEMS.filter((item) => {
+    // Operations page is superadmin-only in the UI.
+    if (item.href === '/admin/operations') {
+      return adminRole === 'superadmin';
+    }
     if (!item.superadminOnly) return true;
     // Treat "manager" and "editor" as roles that can see restricted registrations/on-spot items.
     return adminRole === 'superadmin' || adminRole === 'manager' || adminRole === 'editor';
   });
 
+  const homeHref = adminRole === 'superadmin' ? '/admin/operations' : '/admin/passes';
+
   return (
     <aside className="fixed left-0 top-0 z-40 flex h-full w-[220px] flex-col border-r border-zinc-800 bg-[#0a0a0c]">
       {/* Brand */}
       <div className="flex h-14 items-center border-b border-zinc-800 px-5">
-        <Link href="/admin/operations" className="flex items-center gap-2">
+        <Link href={homeHref} className="flex items-center gap-2">
           <div className="h-7 w-7 rounded-md bg-white flex items-center justify-center">
             <span className="text-xs font-bold text-zinc-900">T</span>
           </div>
